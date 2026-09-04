@@ -543,13 +543,13 @@
           <button id="rst" class="exp alt" title="Restore from a .json backup">Restore</button>
           <input id="rstf" type="file" accept="application/json,.json" style="display:none">
           <button id="clr" class="exp alt danger" title="Clear saved data from this browser">Clear</button>
-          <button id="syncbtn" class="exp alt" title="Share this tracker with a colleague" style="display:none">Share / sync</button>
+          <button id="syncbtn" class="exp alt" title="Share this tracker with a colleague">Share / sync</button>
         </div>
       </div>
       <div id="syncpanel" class="syncpanel">
         <div class="srow">
           <label>Shared endpoint</label>
-          <input id="syncurl" type="url" placeholder="https://your-endpoint.example.com/nova102" autocomplete="off">
+          <input id="syncurl" type="url" placeholder="/.netlify/functions/sync (this site's built-in endpoint)" autocomplete="off">
         </div>
         <div class="srow">
           <label>Your name</label>
@@ -558,7 +558,7 @@
           <button id="pushbtn" class="exp">Push mine</button>
           <label class="sauto"><input id="syncauto" type="checkbox"> auto-pull every 60s</label>
         </div>
-        <div id="syncmsg" class="smsg">Not connected. Paste a shared endpoint to sync this tracker with your colleague.</div>
+        <div id="syncmsg" class="smsg">This site has a built-in shared endpoint already filled in below — just add your name, then Push mine or Pull latest to trade edits with a colleague.</div>
       </div>
       <div class="notes">
         <div class="nform">
@@ -1491,7 +1491,11 @@ function stampSaved(d){
 function notesSave(){ stateSave(); }
 // ---------- shared sync ----------
 const CFGKEY="nova102_sync_v1";
-let syncCfg={url:"",who:"",auto:false,lastPullAt:0,remoteAt:0};
+// Defaults to this site's own built-in sync endpoint (a Netlify Function backed by
+// Netlify Blobs) so nobody has to type a URL — just add a name and push/pull.
+// Resolves relative to wherever this page is actually served from.
+const DEFAULT_SYNC_URL = "/.netlify/functions/sync";
+let syncCfg={url:DEFAULT_SYNC_URL,who:"",auto:false,lastPullAt:0,remoteAt:0};
 let syncTimer=null;
 function cfgLoad(){ try{const r=localStorage.getItem(CFGKEY); if(r) Object.assign(syncCfg,JSON.parse(r));}catch(e){} }
 function cfgSave(){ try{localStorage.setItem(CFGKEY,JSON.stringify(syncCfg));}catch(e){} }
@@ -1737,15 +1741,19 @@ cfgLoad();
       a=document.getElementById("syncauto");
   if(u) u.value=syncCfg.url||""; if(n) n.value=syncCfg.who||"";
   if(a) a.checked=!!syncCfg.auto;
-  if(syncCfg.url){ document.getElementById("syncpanel").classList.add("open");
+  // only auto-open the panel for someone who has actually used sync before —
+  // syncCfg.url is now pre-filled for everyone by default, so it's not a signal on its own
+  if(syncCfg.who){ document.getElementById("syncpanel").classList.add("open");
     smsg(`Connected. Last sync ${syncCfg.lastPullAt?stamp(syncCfg.lastPullAt):"never"}.`); }
-  if(syncCfg.auto) syncAuto(true);
 }
 
 stateLoad();
 
 setWork();
 render();
+
+// pick up any shared edits right away, then keep polling if auto-pull was left on
+if(syncCfg.auto){ syncAuto(true); syncPull(true); }
 
 // ---------- snapshot banner ----------
 (function(){

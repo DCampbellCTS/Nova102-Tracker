@@ -1,0 +1,7 @@
+{
+  "name": "nova102-tracker",
+  "private": true,
+  "dependencies": {
+    "@netlify/blobs": "^8.2.0"
+  }
+}
