@@ -498,6 +498,15 @@
           <button id="csv" class="exp" style="display:none">Export CSV</button>
         </div>
       </div>
+      <div style="display:flex;align-items:center;gap:8px;padding:0 16px 12px;flex-wrap:wrap">
+        <span style="font-size:12px;color:var(--muted)">Due (by IFC):</span>
+        <div class="filter" id="duefilter">
+          <button data-due="ALL" class="on">All</button>
+          <button data-due="T">Due today</button>
+          <button data-due="D7">Within 7 days</button>
+          <button data-due="D14">Within 14 days</button>
+        </div>
+      </div>
       <div style="overflow-x:auto">
         <table id="tbl">
           <thead><tr>
@@ -637,6 +646,7 @@ let sortBy = "sheet";  // "sheet" | "prio" | "ifc"
 const hiddenCols = {};   // colKey -> true when hidden
 let view = "sets";  // "sets" | "sheets"
 let query = "";
+let dueFilter = "ALL";  // "ALL" | "T" | "D7" | "D14" — Dates & cushion table only
 let notes = [];     // {id, ts, tag, text}
 const week = {sat:false, sun:false};   // weekend work toggles
 
@@ -798,6 +808,25 @@ function matches(s){
   return String(s.no).includes(q) || s.wpid.toLowerCase().includes(q) ||
          s.zone.toLowerCase()===q || s.set.toLowerCase().includes(q) ||
          (s.alias||"").toLowerCase().includes(q);
+}
+// Dates & cushion "due" filter — finds sheets/blocks whose IFC falls today or within
+// the next 7/14 calendar days. Overdue (IFC already past) counts as due too. Delivered
+// or held items are excluded since they're no longer meaningfully "due".
+function dueLimit(){
+  if(dueFilter==="ALL") return null;
+  const today=new Date(); today.setHours(0,0,0,0);
+  if(dueFilter==="T")   return today;
+  if(dueFilter==="D7")  return new Date(today.getTime()+7*86400000);
+  if(dueFilter==="D14") return new Date(today.getTime()+14*86400000);
+  return null;
+}
+function dueMatch(ifc, done, held){
+  if(dueFilter==="ALL") return true;
+  if(done || held) return false;
+  if(!ifc) return false;
+  const lim=dueLimit();
+  const d=new Date(ifc); d.setHours(0,0,0,0);
+  return d<=lim;
 }
 
 function renderChips(rows){
@@ -1020,10 +1049,13 @@ function sheetRowCells(r,s){
 
 function renderSheetView(rows){
   document.querySelector("#tbl thead").innerHTML = THEAD_SHEETS;
-  const sheets=allSheets(rows).filter(matches);
+  const sheets=allSheets(rows).filter(matches).filter(s=>dueMatch(s.ifc,s.done,s.held));
   const tb=$("#tbl tbody");
   if(!sheets.length){
-    tb.innerHTML=`<tr><td colspan="10" style="color:var(--faint);padding:16px">No sheet matches \u201c${query}\u201d. Clear the search to see all.</td></tr>`;
+    const bits=[];
+    if(query) bits.push(`match \u201c${query}\u201d`);
+    if(dueFilter!=="ALL") bits.push("fall in that due window");
+    tb.innerHTML=`<tr><td colspan="10" style="color:var(--faint);padding:16px">No sheets ${bits.join(" and ")||"found"}. Clear the search/due filter to see all.</td></tr>`;
     return;
   }
   tb.innerHTML = sheets.map(s=>{
@@ -1043,9 +1075,22 @@ function renderTable(rows){
   document.querySelector("#tbl thead").innerHTML = THEAD_SETS;
   const tb=$("#tbl tbody");
   let html="";
+  let anyRow=false;
   visible(rows).forEach(r=>{
+    let dueSheets = r.sheetList;
+    if(dueFilter!=="ALL"){
+      if(r.detail){
+        dueSheets = r.sheetList.filter(s=>dueMatch(s.ifc,s.done,s.held));
+        if(!dueSheets.length) return;
+      } else if(!dueMatch(r.ifc,false,false)){
+        return;
+      }
+    }
+    anyRow=true;
     const open = !!expanded[r.key];
-    const cnt = r.detail? `${r.count} sheets` : `${r.count} WPs`;
+    const cnt = r.detail
+      ? (dueFilter!=="ALL"? `${dueSheets.length} of ${r.count} sheets due` : `${r.count} sheets`)
+      : `${r.count} WPs`;
     const twist = r.detail? `<span class="tw ${open?'open':''}">\u25b8</span>` : `<span class="tw dim">\u00b7</span>`;
     let roll="";
     if(r.detail && r.rollupBD>0) roll=`<span class="roll late">+${r.rollupBD}d</span>`;
@@ -1069,7 +1114,7 @@ function renderTable(rows){
       <td class="num">${cushCell(r)}</td></tr>`;
     if(r.detail && open){
       html += SUBHEAD;
-      sortSheets(r.sheetList).forEach(s=>{
+      sortSheets(dueFilter!=="ALL"? dueSheets : r.sheetList).forEach(s=>{
         const sn = s.no===null? `<span style="color:var(--tight)">TBC</span>` : `Sheet ${String(s.no).padStart(2,"0")}`;
         const late = s.cush!==null&&s.cush<0;
         const cls = s.held? 'holdRow' : (s.done? 'doneRow' : (s.gotIFR? ('withUs'+(late?' lateEdge':'')) : (late?'behindRow':(s.slipBD>0?'lateRow':''))));
@@ -1088,7 +1133,7 @@ function renderTable(rows){
         </td></tr>`;
     }
   });
-  tb.innerHTML=html;
+  tb.innerHTML = anyRow? html : `<tr><td colspan="10" style="color:var(--faint);padding:16px">No sheet sets due in that window. Clear the due filter to see all.</td></tr>`;
   tb.querySelectorAll("tr.clickable").forEach(tr=>{
     tr.addEventListener("click",e=>{
       if(e.target.tagName==="INPUT"||e.target.tagName==="BUTTON") return;
@@ -1598,6 +1643,12 @@ document.querySelectorAll("#filter button").forEach(b=>{
   b.addEventListener("click",()=>{
     document.querySelectorAll("#filter button").forEach(x=>x.classList.remove("on"));
     b.classList.add("on"); filter=b.dataset.ph; render();
+  });
+});
+document.querySelectorAll("#duefilter button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#duefilter button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); dueFilter=b.dataset.due; render();
   });
 });
 const PRESETS={
