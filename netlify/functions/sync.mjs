@@ -9,8 +9,16 @@
 // write it. There is no authentication — anyone with the link can overwrite the
 // shared state. That matches the tracker itself (no login anywhere), but is worth
 // knowing before treating this as anything more than an internal, trusted hand-off.
+//
+// This is written as a modern ("v2") Netlify Function — a plain Request in, Response
+// out, no connectLambda() — on purpose: that's the only function shape Netlify hands
+// an "uncachedEdgeURL" to, and Netlify Blobs needs that value to offer "strong"
+// (read-your-own-write) consistency. The older exports.handler=... shape never
+// receives it, so asking for strong consistency there fails at request time with
+// "the environment has not been configured with a 'uncachedEdgeURL' property" —
+// which is what the first version of this function hit in testing.
 
-const { getStore, connectLambda } = require("@netlify/blobs");
+import { getStore } from "@netlify/blobs";
 
 const STORE_NAME = "nova102-tracker";
 const KEY = "shared-state";
@@ -21,72 +29,76 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-exports.handler = async (event) => {
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 204, headers: CORS_HEADERS, body: "" };
+export default async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("", { status: 204, headers: CORS_HEADERS });
   }
 
   let store;
   try {
-    // This function uses the classic Lambda-compatible handler shape, so Netlify
-    // doesn't auto-populate the Blobs environment the way it does for the newer
-    // handler format — connectLambda() wires it up manually from the raw event.
-    connectLambda(event);
     // "strong" consistency trades a little speed for a guarantee that a GET right
     // after a PUT (exactly the push-then-pull pattern this endpoint exists for)
     // sees that write immediately, instead of Blobs' default eventually-consistent
     // edge caching, which could hand a puller a stale value for a few seconds.
     store = getStore({ name: STORE_NAME, consistency: "strong" });
   } catch (err) {
-    return {
-      statusCode: 500,
+    return new Response(JSON.stringify({ error: "Blob store unavailable: " + err.message }), {
+      status: 500,
       headers: CORS_HEADERS,
-      body: JSON.stringify({ error: "Blob store unavailable: " + err.message }),
-    };
+    });
   }
 
-  if (event.httpMethod === "GET") {
+  if (req.method === "GET") {
     try {
       const data = await store.get(KEY, { type: "json" });
-      return {
-        statusCode: 200,
+      return new Response(JSON.stringify(data || {}), {
+        status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json", "Cache-Control": "no-store" },
-        body: JSON.stringify(data || {}),
-      };
+      });
     } catch (err) {
-      return {
-        statusCode: 500,
+      return new Response(JSON.stringify({ error: "Read failed: " + err.message }), {
+        status: 500,
         headers: CORS_HEADERS,
-        body: JSON.stringify({ error: "Read failed: " + err.message }),
-      };
+      });
     }
   }
 
-  if (event.httpMethod === "PUT") {
+  if (req.method === "PUT") {
     let payload;
     try {
-      payload = JSON.parse(event.body || "{}");
+      payload = await req.json();
     } catch (err) {
-      return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: "Invalid JSON body" }) };
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: CORS_HEADERS,
+      });
     }
     if (!payload || typeof payload !== "object" || !payload.state) {
-      return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: "Missing 'state' field" }) };
+      return new Response(JSON.stringify({ error: "Missing 'state' field" }), {
+        status: 400,
+        headers: CORS_HEADERS,
+      });
     }
     try {
       await store.setJSON(KEY, payload);
-      return {
-        statusCode: 200,
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-        body: JSON.stringify({ ok: true }),
-      };
+      });
     } catch (err) {
-      return {
-        statusCode: 500,
+      return new Response(JSON.stringify({ error: "Write failed: " + err.message }), {
+        status: 500,
         headers: CORS_HEADERS,
-        body: JSON.stringify({ error: "Write failed: " + err.message }),
-      };
+      });
     }
   }
 
-  return { statusCode: 405, headers: CORS_HEADERS, body: JSON.stringify({ error: "Method not allowed" }) };
+  return new Response(JSON.stringify({ error: "Method not allowed" }), {
+    status: 405,
+    headers: CORS_HEADERS,
+  });
+};
+
+export const config = {
+  path: "/.netlify/functions/sync",
 };
