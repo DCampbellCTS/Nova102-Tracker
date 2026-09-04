@@ -32,7 +32,11 @@ exports.handler = async (event) => {
     // doesn't auto-populate the Blobs environment the way it does for the newer
     // handler format — connectLambda() wires it up manually from the raw event.
     connectLambda(event);
-    store = getStore(STORE_NAME);
+    // "strong" consistency trades a little speed for a guarantee that a GET right
+    // after a PUT (exactly the push-then-pull pattern this endpoint exists for)
+    // sees that write immediately, instead of Blobs' default eventually-consistent
+    // edge caching, which could hand a puller a stale value for a few seconds.
+    store = getStore({ name: STORE_NAME, consistency: "strong" });
   } catch (err) {
     return {
       statusCode: 500,
