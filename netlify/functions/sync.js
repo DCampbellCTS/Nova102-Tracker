@@ -3,14 +3,14 @@
 // PUT  -> stores a new { by, savedAt, state } payload, overwriting whatever was there
 //
 // Backed by Netlify Blobs, which needs no separate account or API key when this
-// function runs on Netlify itself - getStore() picks up the site''s own credentials
+// function runs on Netlify itself — getStore() picks up the site's own credentials
 // automatically. Data lives in the "nova102-tracker" store under a single key, so
-// everyone who has this site''s URL (and therefore this function''s URL) can read and
-// write it. There is no authentication - anyone with the link can overwrite the
+// everyone who has this site's URL (and therefore this function's URL) can read and
+// write it. There is no authentication — anyone with the link can overwrite the
 // shared state. That matches the tracker itself (no login anywhere), but is worth
 // knowing before treating this as anything more than an internal, trusted hand-off.
 
-const { getStore } = require("@netlify/blobs");
+const { getStore, connectLambda } = require("@netlify/blobs");
 
 const STORE_NAME = "nova102-tracker";
 const KEY = "shared-state";
@@ -28,6 +28,10 @@ exports.handler = async (event) => {
 
   let store;
   try {
+    // This function uses the classic Lambda-compatible handler shape, so Netlify
+    // doesn't auto-populate the Blobs environment the way it does for the newer
+    // handler format — connectLambda() wires it up manually from the raw event.
+    connectLambda(event);
     store = getStore(STORE_NAME);
   } catch (err) {
     return {
@@ -62,7 +66,7 @@ exports.handler = async (event) => {
       return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: "Invalid JSON body" }) };
     }
     if (!payload || typeof payload !== "object" || !payload.state) {
-      return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: "Missing ''state'' field" }) };
+      return { statusCode: 400, headers: CORS_HEADERS, body: JSON.stringify({ error: "Missing 'state' field" }) };
     }
     try {
       await store.setJSON(KEY, payload);
