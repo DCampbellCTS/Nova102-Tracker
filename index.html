@@ -1,0 +1,1714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Nova — Drawing Pipeline Impact Simulator</title>
+<style>
+  :root{
+    --ink:#16202E; --ink2:#22303F; --rail:#1B2735;
+    --paper:#F4F6F8; --card:#FFFFFF; --line:#D8DDE4; --line2:#E9ECF1;
+    --text:#1B2430; --muted:#5C6B7A; --faint:#8A98A6;
+    --live:#2F6FED; --live-soft:#E7EEFD;
+    --ahead:#12855B; --ahead-soft:#E1F3EB;
+    --tight:#B7791F; --tight-soft:#FBEFD8;
+    --behind:#C43D3D; --behind-soft:#FBE4E4;
+    --ug:#2F6FED; --ag:#7A5AF0;
+    --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+    --ui:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:var(--ui);color:var(--text);background:var(--paper);font-size:15px;line-height:1.45}
+  .wrap{display:grid;grid-template-columns:320px 1fr;min-height:100vh}
+
+  /* ---------- Control rail ---------- */
+  .rail{background:var(--rail);color:#E7ECF2;padding:22px 20px 30px;position:sticky;top:0;height:100vh;overflow-y:auto}
+  .rail h1{font-size:16px;font-weight:650;letter-spacing:.1px;margin:0 0 2px;color:#fff}
+  .rail .sub{font-size:12.5px;color:#9DB0C2;margin:0 0 20px;line-height:1.4}
+  .grp{margin-bottom:22px}
+  .grp>.lab{font-size:11px;font-weight:650;letter-spacing:.6px;color:#7E93A8;text-transform:uppercase;margin-bottom:12px}
+  .lever{margin-bottom:15px}
+  .lever .row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+  .lever .name{font-size:13.5px;color:#DDE5EE}
+  .lever .val{font-family:var(--mono);font-size:13.5px;color:#fff;font-weight:600;
+    background:#2B3B4D;padding:1px 8px;border-radius:5px;min-width:52px;text-align:center}
+  .lever .val.changed{background:var(--live);color:#fff}
+  input[type=range]{width:100%;-webkit-appearance:none;appearance:none;height:4px;border-radius:3px;
+    background:#3A4B5E;outline:none;margin:6px 0 0}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:17px;height:17px;
+    border-radius:50%;background:#fff;border:3px solid var(--live);cursor:pointer;transition:transform .08s}
+  input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.12)}
+  input[type=range]::-moz-range-thumb{width:17px;height:17px;border-radius:50%;background:#fff;
+    border:3px solid var(--live);cursor:pointer}
+  .hint{font-size:11.5px;color:#7E93A8;margin-top:4px;line-height:1.35}
+  .presets{display:flex;flex-wrap:wrap;gap:7px}
+  .presets button{flex:1 1 auto;font-family:var(--ui);font-size:12.5px;color:#DDE5EE;background:#2B3B4D;
+    border:1px solid #3A4B5E;border-radius:7px;padding:8px 9px;cursor:pointer;transition:background .12s,border-color .12s}
+  .presets button:hover{background:#33475C;border-color:var(--live)}
+  .presets button.reset{background:transparent}
+  .toggles{display:flex;gap:8px}
+  .toggles button{flex:1;font-family:var(--ui);font-size:13px;color:#DDE5EE;background:#2B3B4D;
+    border:1px solid #3A4B5E;border-radius:8px;padding:10px;cursor:pointer;display:flex;align-items:center;
+    justify-content:center;gap:8px;transition:background .12s,border-color .12s,color .12s}
+  .toggles button::before{content:"";width:9px;height:9px;border-radius:50%;background:#5A6B7E;transition:background .12s}
+  .toggles button:hover{border-color:var(--live)}
+  .toggles button.on{background:var(--live);border-color:var(--live);color:#fff}
+  .toggles button.on::before{background:#fff}
+  .sunrow{display:flex;align-items:center;gap:8px;margin-top:9px}
+  .sunrow label{font-size:12px;color:#9DB0C2}
+  .sunrow input{font-family:var(--mono);font-size:11.5px;background:#2B3B4D;color:#E7ECF2;
+    border:1px solid #3A4B5E;border-radius:6px;padding:4px 6px;flex:1;outline:none}
+  .sunrow input:focus{border-color:var(--live)}
+
+  /* ---------- Stage ---------- */
+  .stage{padding:22px 26px 40px;max-width:1160px}
+  .snapbar{display:flex;align-items:center;gap:9px;background:var(--live-soft);border:1px solid #C4D6FA;
+    border-radius:9px;padding:9px 14px;margin-bottom:16px;font-size:12.5px;color:#1F4FBD}
+  .snapbar .dot{width:7px;height:7px;border-radius:50%;background:var(--live);flex:none}
+  .snapbar b{color:#153A94}
+  .topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  .title h2{margin:0;font-size:22px;font-weight:680;letter-spacing:-.2px}
+  .title p{margin:3px 0 0;color:var(--muted);font-size:13.5px}
+  .filter{display:flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:4px}
+  .filter button{font-family:var(--ui);font-size:13px;color:var(--muted);background:transparent;border:none;
+    border-radius:6px;padding:7px 14px;cursor:pointer;font-weight:550}
+  .filter button.on{background:var(--ink);color:#fff}
+
+  .chips{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px;margin-bottom:22px}
+  .chip{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:14px 16px}
+  .chip .k{font-size:12px;color:var(--muted);margin-bottom:7px}
+  .chip .v{font-family:var(--mono);font-size:26px;font-weight:650;letter-spacing:-.5px;line-height:1}
+  .chip .u{font-size:12.5px;color:var(--faint);margin-top:5px}
+  .chip.flag .v{color:var(--behind)}
+  .chip.ok .v{color:var(--ahead)}
+
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:13px;overflow:hidden;margin-bottom:22px}
+  .panel .head{padding:14px 18px;border-bottom:1px solid var(--line2);display:flex;justify-content:space-between;align-items:center}
+  .panel .head h3{margin:0;font-size:15px;font-weight:640}
+  .panel .head .leg{display:flex;gap:16px;font-size:12px;color:var(--muted);align-items:center;flex-wrap:wrap}
+  .leg .sw{display:inline-flex;align-items:center;gap:6px}
+  .leg .box{width:12px;height:12px;border-radius:3px;display:inline-block}
+  .leg .dot{width:11px;height:11px;transform:rotate(45deg);display:inline-block}
+
+  /* ---------- Timeline ---------- */
+  .tl{padding:10px 18px 20px}
+  .axis{position:relative;height:22px;margin-left:var(--lanelabel);border-bottom:1px solid var(--line)}
+  .axis .mo{position:absolute;top:3px;font-family:var(--mono);font-size:11px;color:var(--faint);
+    border-left:1px solid var(--line2);padding-left:5px;height:16px}
+  .lane{position:relative;height:38px;display:flex;align-items:center;border-bottom:1px solid var(--line2)}
+  .lane:last-child{border-bottom:none}
+  .lane .lbl{width:var(--lanelabel);flex:0 0 var(--lanelabel);padding-right:12px;font-size:13px;font-weight:560;
+    display:flex;align-items:center;gap:8px;overflow:hidden;white-space:nowrap}
+  .pill{font-size:10.5px;font-weight:650;padding:1px 6px;border-radius:4px;color:#fff;flex:none}
+  .pill.UG{background:var(--ug)} .pill.AG{background:var(--ag)}
+  .track{position:relative;flex:1;height:100%}
+  .bar{position:absolute;top:50%;transform:translateY(-50%);height:12px;border-radius:6px;
+    transition:left .28s cubic-bezier(.4,0,.2,1),width .28s cubic-bezier(.4,0,.2,1),background .2s}
+  .bar.pipe{background:linear-gradient(90deg,#4C7EF0,#6E97F4)}
+  .bar.fab{background:#CBD6E6;height:8px}
+  .mk{position:absolute;top:50%;width:12px;height:12px;transform:translate(-50%,-50%) rotate(45deg);
+    border:2px solid #fff;transition:left .28s cubic-bezier(.4,0,.2,1);box-shadow:0 1px 3px rgba(0,0,0,.2);z-index:3}
+  .mk.ifc{background:var(--ink)}
+  .mk.iff{width:9px;height:9px;background:#fff;border:2px solid #7C8B9B;border-radius:0}
+  .ghost{position:absolute;top:50%;width:2px;height:22px;transform:translate(-50%,-50%);
+    background:repeating-linear-gradient(#B0BAC6 0 3px,transparent 3px 6px);z-index:2;transition:left .28s}
+  .today{position:absolute;top:0;bottom:0;width:2px;background:var(--behind);z-index:4;opacity:.85}
+  .today .cap{position:absolute;top:-2px;left:5px;font-size:10px;font-family:var(--mono);color:var(--behind);white-space:nowrap}
+
+  /* ---------- Table ---------- */
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line2);font-size:13.5px;white-space:nowrap}
+  th{font-size:11.5px;color:var(--muted);font-weight:600;letter-spacing:.3px;background:#FBFCFD}
+  td.num,th.num{font-family:var(--mono);text-align:right}
+  .delta{font-family:var(--mono);font-size:12px;padding:1px 6px;border-radius:5px;margin-left:6px;white-space:nowrap}
+  .dt{display:inline-block}
+  td.num .roll,td.num .delta{vertical-align:1px}
+  .delta.up{background:var(--behind-soft);color:var(--behind)}
+  .delta.down{background:var(--ahead-soft);color:var(--ahead)}
+  .delta.flat{color:var(--faint)}
+  input.need{font-family:var(--mono);font-size:12.5px;border:1px solid var(--line);border-radius:6px;
+    padding:5px 7px;width:132px;color:var(--text);background:#fff}
+  input.need:focus{outline:none;border-color:var(--live);box-shadow:0 0 0 3px var(--live-soft)}
+  .cush{font-family:var(--mono);font-weight:600;padding:2px 9px;border-radius:6px;font-size:12.5px}
+  .cush.ahead{background:var(--ahead-soft);color:var(--ahead)}
+  .cush.tight{background:var(--tight-soft);color:var(--tight)}
+  .cush.behind{background:var(--behind-soft);color:var(--behind)}
+  .cush.none{color:var(--faint)}
+  tr.ifcshift td{background:var(--live-soft)}
+  tr.clickable{cursor:pointer}
+  tr.clickable:hover td{background:#F4F7FC}
+  .tw{display:inline-block;width:14px;color:var(--muted);transition:transform .15s;font-size:11px}
+  .tw.open{transform:rotate(90deg)}
+  .tw.dim{color:var(--line);}
+  tr.sub td{background:#FAFBFD;border-bottom:1px solid var(--line2);padding:6px 14px;font-size:12.5px}
+  tr.sub.subhead td{background:#F2F5F9;color:var(--muted);font-size:11px;font-weight:600;letter-spacing:.3px;padding:5px 14px}
+  tr.sub.subfoot td{background:#F2F5F9;color:var(--muted);font-size:12px;padding:7px 14px}
+  tr.sub.subfoot b{color:var(--text)}
+  tr.sub.lateRow td{background:#FDF6F6}
+  .mono{font-family:var(--mono);font-size:12px;color:var(--ink2)}
+  input.deliv{font-family:var(--mono);font-size:12px;border:1px solid var(--line);border-radius:6px;
+    padding:4px 6px;width:126px;color:var(--text);background:#fff}
+  input.deliv:focus{outline:none;border-color:var(--live);box-shadow:0 0 0 3px var(--live-soft)}
+  input.deliv.set{border-color:var(--live);background:var(--live-soft);font-weight:600}
+  button.clr{font-family:var(--ui);font-size:10.5px;color:var(--muted);background:transparent;
+    border:1px solid var(--line);border-radius:5px;padding:3px 6px;margin-left:5px;cursor:pointer}
+  button.clr:hover{border-color:var(--behind);color:var(--behind)}
+  .roll{display:inline-block;font-family:var(--mono);font-size:11px;padding:1px 6px;border-radius:5px;margin-left:6px}
+  .roll.late{background:var(--behind-soft);color:var(--behind)}
+  .roll.early{background:var(--ahead-soft);color:var(--ahead)}
+  .ovc{font-size:10.5px;font-weight:650;color:#fff;background:var(--live);border-radius:4px;padding:1px 5px;margin-left:7px}
+  .tick{position:absolute;top:50%;width:2px;height:14px;transform:translate(-50%,-50%);
+    background:var(--live);opacity:.75;z-index:2;transition:left .28s}
+  .needmk{position:absolute;top:50%;width:0;height:0;transform:translate(-50%,-50%);
+    border-left:5px solid transparent;border-right:5px solid transparent;
+    border-top:8px solid var(--tight);z-index:3;transition:left .28s}
+  /* per-sheet milestone + need inputs */
+  input.ms,input.need2{font-family:var(--mono);font-size:11.5px;border:1px solid var(--line);
+    border-radius:6px;padding:4px 5px;width:108px;color:var(--text);background:#fff}
+  input.ms:focus,input.need2:focus{outline:none;border-color:var(--live);box-shadow:0 0 0 3px var(--live-soft)}
+  input.ms.set{border-color:var(--live);background:var(--live-soft);font-weight:600}
+  input.ms.done{border-color:var(--ahead);background:var(--ahead-soft);font-weight:600;color:#0B5C40}
+  input.need2{width:112px;color:var(--muted)}
+  input.need2.own{border-color:var(--tight);background:var(--tight-soft);color:#7A4E10;font-weight:600}
+  .warn{display:inline-block;margin-left:4px;width:15px;height:15px;line-height:14px;text-align:center;
+    border-radius:50%;background:var(--behind);color:#fff;font-size:10px;font-weight:700;cursor:help}
+  .setsub{display:block;font-size:10.5px;color:var(--faint);margin-top:2px}
+  /* priority */
+  select.pri{font-family:var(--mono);font-size:11px;border:1px solid var(--line);border-radius:6px;
+    padding:3px 2px;width:54px;text-align:center;background:#fff;color:var(--muted);cursor:pointer}
+  select.pri:focus{outline:none;border-color:var(--live)}
+  select.pri.p1{background:#FDE7E7;border-color:#E9A8A8;color:#9B1C1C;font-weight:700}
+  select.pri.p2{background:#FDECDC;border-color:#E8BC96;color:#9A4A10;font-weight:680}
+  select.pri.p3{background:#FDF4DC;border-color:#E6C88A;color:#8A5A08;font-weight:650}
+  select.pri.p4{background:#EDF5E4;border-color:#B9D49B;color:#3F6420;font-weight:620}
+  select.pri.p5{background:#EAF0FB;border-color:#B6C8EA;color:#28489B;font-weight:600}
+  select.pri.p6{background:#F0EEF8;border-color:#C4BCE0;color:#4B3F87;font-weight:600}
+  .pbadge{display:inline-block;font-size:10.5px;font-weight:700;border-radius:5px;padding:1px 6px}
+  .pbadge.p1{background:#FDE7E7;color:#9B1C1C}
+  .pbadge.p2{background:#FDECDC;color:#9A4A10}
+  .pbadge.p3{background:#FDF4DC;color:#8A5A08}
+  .pbadge.p4{background:#EDF5E4;color:#3F6420}
+  .pbadge.p5{background:#EAF0FB;color:#28489B}
+  .pbadge.p6{background:#F0EEF8;color:#4B3F87}
+  .tp{position:absolute;top:-5px;right:-5px;width:15px;height:15px;border-radius:50%;
+    font-size:9.5px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;
+    border:1.5px solid #fff;z-index:2}
+  .tp.p1{background:#C43D3D} .tp.p2{background:#C2661C} .tp.p3{background:#B7791F}
+  .tp.p4{background:#5E8C36} .tp.p5{background:#2F6FED} .tp.p6{background:#6B5CB8}
+  /* meeting name */
+  input.alias{display:block;width:100%;max-width:190px;margin-top:3px;font-family:var(--ui);
+    font-size:12px;font-weight:600;color:var(--text);background:transparent;
+    border:1px solid transparent;border-radius:5px;padding:2px 5px;outline:none}
+  input.alias:hover{border-color:var(--line);background:#fff}
+  input.alias:focus{border-color:var(--live);background:#fff;box-shadow:0 0 0 3px var(--live-soft)}
+  input.alias::placeholder{color:#B6BFC9;font-weight:400;font-style:italic}
+  .sq{overflow:visible}
+  tr.sub.behindRow td,tr.behindRow td{background:#FDF0F0}
+  th,td{white-space:nowrap}
+  tr.sub.doneRow td{background:#F1F8F4}
+  tr.sub.holdRow td,tr.holdRow td{background:#F4F4F6;color:#6E7681}
+  tr.holdRow .mono{color:#7D8590}
+  .seg .sg.on.onhold{background:#6E7681;color:#fff}
+  /* IFR received — "ball in our court" */
+  .ifrf{display:inline-block;margin-left:5px;font-family:var(--ui);font-size:9.5px;font-weight:650;
+    letter-spacing:.2px;border-radius:4px;padding:2px 5px;cursor:pointer;vertical-align:1px;
+    border:1px solid var(--line);background:#fff;color:var(--faint);transition:all .12s}
+  .ifrf:hover{border-color:var(--live);color:var(--live)}
+  .ifrf.got{background:var(--live);border-color:var(--live);color:#fff}
+  .ifrf.done{background:transparent;border-color:transparent;color:var(--ahead);cursor:default;font-size:12px}
+  tr.withUs td,tr.sub.withUs td{background:#EAF1FC}
+  tr.lateEdge td:first-child,tr.sub.lateEdge td:nth-child(2){box-shadow:inset 3px 0 0 var(--behind)}
+  .sq.gotifr{border-color:var(--live);border-width:2px}
+  .cush.hold{background:#EDEEF1;color:#6E7681}
+  .holdtag{display:inline-block;font-size:9px;font-weight:700;color:#fff;background:#6E7681;
+    border-radius:3px;padding:0 4px;margin-right:4px;letter-spacing:.3px}
+  .sq.onhold{opacity:.45;border-style:dashed}
+  .sq.onhold .st{background:#9AA3AD}
+  input.deliv.done{border-color:var(--ahead);background:var(--ahead-soft);font-weight:600;color:#0B5C40}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .seg .sg{font-family:var(--ui);font-size:10.5px;color:var(--muted);background:#fff;border:none;
+    padding:4px 8px;cursor:pointer;transition:background .1s,color .1s}
+  .seg .sg+.sg{border-left:1px solid var(--line)}
+  .seg .sg:hover{background:#F2F5F9}
+  .seg .sg.on{background:var(--ink2);color:#fff}
+  .seg .sg.on.done{background:var(--ahead);color:#fff}
+  .prog{display:inline-block;width:52px;height:5px;border-radius:3px;background:var(--line2);
+    overflow:hidden;vertical-align:middle;margin-right:7px}
+  .prog .bar2{display:block;height:100%;background:var(--ahead);border-radius:3px;transition:width .25s}
+  .pctxt{font-size:11.5px;color:var(--muted)}
+  button.exp{font-family:var(--ui);font-size:12px;font-weight:560;color:#fff;background:var(--ink);
+    border:none;border-radius:7px;padding:7px 13px;cursor:pointer;transition:background .12s}
+  button.exp:hover{background:var(--live)}
+  button.exp.alt{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  button.exp.alt:hover{background:#F2F5F9;color:var(--text)}
+  button.exp.alt.danger:hover{background:var(--behind-soft);color:var(--behind);border-color:#EBB4B4}
+  .syncpanel{display:none;padding:14px 18px;border-bottom:1px solid var(--line2);background:#FAFBFD}
+  .syncpanel.open{display:block}
+  .srow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px}
+  .srow label{font-size:12px;color:var(--muted);min-width:112px}
+  .srow input[type=url],.srow input[type=text]{flex:1;min-width:190px;font-family:var(--ui);font-size:12.5px;
+    color:var(--text);background:#fff;border:1px solid var(--line);border-radius:7px;padding:7px 10px;outline:none}
+  .srow input:focus{border-color:var(--live);box-shadow:0 0 0 3px var(--live-soft)}
+  .sauto{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);min-width:0}
+  .smsg{font-size:12.5px;color:var(--muted);line-height:1.45}
+  .smsg.ok{color:var(--ahead)} .smsg.bad{color:var(--behind)} .smsg.warn{color:var(--tight)}
+  .colwrap{position:relative;display:inline-block}
+  .colmenu{position:absolute;right:0;top:34px;z-index:40;display:none;background:var(--card);
+    border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(16,24,40,.14);
+    padding:8px;min-width:186px}
+  .colmenu.open{display:block}
+  .colmenu .ci{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;
+    font-size:13px;color:var(--text);cursor:pointer;user-select:none}
+  .colmenu .ci:hover{background:#F2F5F9}
+  .colmenu .ci input{accent-color:var(--live);cursor:pointer}
+  .colmenu .cdiv{height:1px;background:var(--line2);margin:6px 4px}
+  .colmenu .call{font-size:12px;color:var(--muted);background:transparent;border:none;
+    padding:4px 8px;cursor:pointer}
+  .colmenu .call:hover{color:var(--live)}
+
+  .ctrls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .find{font-family:var(--ui);font-size:13px;color:var(--text);background:var(--card);
+    border:1px solid var(--line);border-radius:9px;padding:9px 12px;width:200px;outline:none}
+  .find:focus{border-color:var(--live);box-shadow:0 0 0 3px var(--live-soft)}
+
+  /* sheet index strip */
+  .idx{padding:14px 18px 18px;display:flex;flex-wrap:wrap;gap:6px}
+  .sq{position:relative;min-width:42px;height:38px;border-radius:8px;border:1px solid var(--line);
+    background:#fff;cursor:pointer;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:1px;transition:transform .1s,box-shadow .12s,border-color .12s;padding:0 5px}
+  .sq:hover{transform:translateY(-2px);box-shadow:0 3px 8px rgba(16,24,40,.12);border-color:var(--ink2)}
+  .sq .n{font-family:var(--mono);font-size:13px;font-weight:650;line-height:1}
+  .sq .z{font-size:9px;color:var(--faint);line-height:1;letter-spacing:.2px}
+  .sq .st{position:absolute;left:5px;right:5px;bottom:3px;height:3px;border-radius:2px;background:#C7D0DB}
+  .sq.done{background:var(--ahead-soft);border-color:#9ED4BC}
+  .sq.done .st{background:var(--ahead)}
+  .sq.late{background:var(--behind-soft);border-color:#EBB4B4}
+  .sq.late .st{background:var(--behind)}
+  .sq.tbc{border-style:dashed}
+  .sq.tbc .st{background:var(--tight)}
+  .sq.dim{opacity:.3}
+  .sq.hit{border-color:var(--live);box-shadow:0 0 0 3px var(--live-soft)}
+  .idxgrp{display:flex;align-items:center;gap:6px;margin-right:4px}
+  .idxgrp .gl{font-size:10.5px;font-weight:650;color:var(--muted);writing-mode:horizontal-tb;
+    padding:2px 7px;background:#EFF3F8;border-radius:5px;white-space:nowrap}
+
+  /* notes */
+  .notes{padding:14px 18px 18px}
+  .nform{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .ntag{font-family:var(--ui);font-size:12.5px;color:var(--text);background:#fff;border:1px solid var(--line);
+    border-radius:7px;padding:8px 9px;max-width:210px;outline:none}
+  .ntag:focus{border-color:var(--live)}
+  .ntext{flex:1;min-width:220px;font-family:var(--ui);font-size:13px;color:var(--text);background:#fff;
+    border:1px solid var(--line);border-radius:7px;padding:8px 11px;outline:none}
+  .ntext:focus{border-color:var(--live);box-shadow:0 0 0 3px var(--live-soft)}
+  .nlist{display:flex;flex-direction:column;gap:0}
+  .nrow{display:flex;gap:12px;padding:10px 2px;border-bottom:1px solid var(--line2);align-items:flex-start}
+  .nrow:last-child{border-bottom:none}
+  .nmeta{flex:0 0 128px;font-family:var(--mono);font-size:11px;color:var(--faint);line-height:1.5;padding-top:1px}
+  .nbody{flex:1;font-size:13.5px;line-height:1.45}
+  .ntagx{display:inline-block;font-size:10.5px;font-weight:650;color:#fff;background:var(--ink2);
+    border-radius:4px;padding:1px 6px;margin-right:7px;vertical-align:1px}
+  .ntagx.gen{background:#8A98A6}
+  .ndel{flex:none;font-family:var(--ui);font-size:10.5px;color:var(--faint);background:transparent;
+    border:1px solid transparent;border-radius:5px;padding:3px 6px;cursor:pointer}
+  .nrow:hover .ndel{border-color:var(--line);color:var(--muted)}
+  .ndel:hover{border-color:var(--behind);color:var(--behind)}
+  .nempty{font-size:13px;color:var(--faint);padding:8px 2px}
+  .nsave{font-size:11.5px;color:var(--faint)}
+  .foot{font-size:12px;color:var(--faint);line-height:1.5;margin-top:6px}
+  .foot b{color:var(--muted);font-weight:600}
+
+  /* timeline: expandable per-sheet sub-lanes, mirrors the table's expand/collapse */
+  .lane.clickable{cursor:pointer}
+  .lane.clickable:hover{background:#FAFBFD}
+  .lane.sublane{height:30px}
+  .lane.sublane .lbl{font-size:12px;color:var(--muted);font-weight:500;padding-left:18px}
+  .lane.sublane .bar.pipe{opacity:.8}
+  .lane.sublane.held{opacity:.42}
+  .lane.sublane.done .mk.ifc{background:var(--ahead)}
+  /* per-sheet notes, shown inline under the work package so they're never scrolled out of view */
+  .wpnotes{margin-top:4px}
+  .wpnotes .noteline{font-size:11.5px;color:var(--muted);font-style:italic;line-height:1.35;
+    padding-left:7px;border-left:2px solid var(--line2);margin-bottom:3px;white-space:normal;max-width:260px}
+  .wpnotes .noteline:last-child{margin-bottom:0}
+  .notec{display:inline-block;font-size:10px;font-weight:650;color:#fff;background:#8A98A6;
+    border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px}
+
+  @media (max-width:880px){
+    .wrap{grid-template-columns:1fr}
+    .rail{position:static;height:auto}
+    .chips{grid-template-columns:repeat(2,1fr)}
+    :root{--lanelabel:120px}
+  }
+  @media (min-width:881px){ :root{--lanelabel:190px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- CONTROL RAIL -->
+  <aside class="rail">
+    <h1>Drawing pipeline levers</h1>
+    <p class="sub">Move a duration and every block's IFC and IFF dates reflow live. Anchor is the ARCO clash-free sign-off.</p>
+
+    <div class="grp">
+      <div class="lab">IFR &rarr; IFC review pipeline</div>
+      <div class="lever" data-lever="ifr">
+        <div class="row"><span class="name">IFR drawing creation</span><span class="val">3 bd</span></div>
+        <input type="range" min="0" max="10" step="1" value="3">
+      </div>
+      <div class="lever" data-lever="rev">
+        <div class="row"><span class="name">IFR review</span><span class="val">3 bd</span></div>
+        <input type="range" min="0" max="10" step="1" value="3">
+      </div>
+      <div class="lever" data-lever="red">
+        <div class="row"><span class="name">Redline corrections</span><span class="val">0 bd</span></div>
+        <input type="range" min="0" max="6" step="1" value="0">
+      </div>
+      <div class="lever" data-lever="fin">
+        <div class="row"><span class="name">IFC review</span><span class="val">0 bd</span></div>
+        <input type="range" min="0" max="6" step="1" value="0">
+      </div>
+      <div class="lever" data-lever="lap">
+        <div class="row"><span class="name">Stage overlap (fast-track)</span><span class="val">0 bd</span></div>
+        <input type="range" min="0" max="6" step="1" value="0">
+      </div>
+      <div class="hint">Baseline collapses redline &amp; IFC review to same-day (6 bd sign-off&rarr;IFC, matching the workbook). Overlap lets each handoff bleed into the previous stage &mdash; it can't beat the longest single stage.</div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">IFC &rarr; IFF fabrication</div>
+      <div class="lever" data-lever="fab">
+        <div class="row"><span class="name">Fab release lag</span><span class="val">5 bd</span></div>
+        <input type="range" min="0" max="20" step="1" value="5">
+      </div>
+      <div class="hint">Assumption &mdash; set to your real fab + ship reality. Drives the IFF marker.</div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">Sign-off risk</div>
+      <div class="lever" data-lever="slip">
+        <div class="row"><span class="name">Global sign-off slip</span><span class="val">0 bd</span></div>
+        <input type="range" min="-5" max="20" step="1" value="0">
+      </div>
+      <div class="hint">Shifts every block's anchor. A slip pushes IFC and construction directly.</div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">Weekend work</div>
+      <div class="toggles" id="weekend">
+        <button data-day="sat">Saturday</button>
+        <button data-day="sun">Sunday</button>
+      </div>
+      <div class="sunrow">
+        <label for="sunend">Sundays through</label>
+        <input id="sunend" type="date" value="">
+      </div>
+      <div class="hint">Turn on to count that day as a working day &mdash; compresses every date. Saturdays run indefinitely; set a date to end the Sunday surge (blank = Sundays continue). Baseline stays Mon&ndash;Fri, so the gain shows as a delta.</div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">Edited dates</div>
+      <div class="toggles" id="followsel">
+        <button data-f="1" class="on">Follow levers</button>
+        <button data-f="0">Hold fixed</button>
+      </div>
+      <div class="hint">Dates you typed keep their gap from plan and shift when you move a duration. Switch to Hold fixed to freeze them. Anything marked <b>In hand</b> never moves either way.</div>
+    </div>
+
+    <div class="grp">
+      <div class="lab">Scenarios</div>
+      <div class="presets">
+        <button data-preset="base" class="reset">Reset to baseline</button>
+        <button data-preset="fast">Fast-track</button>
+        <button data-preset="churn">Heavy redline</button>
+        <button data-preset="slip5">Sign-off slips 1 wk</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- STAGE -->
+  <main class="stage">
+    <div class="snapbar" id="snapbar"><span class="dot"></span><span id="snapbarText">Snapshot</span></div>
+    <div class="topbar">
+      <div class="title">
+        <h2>Project Nova — IND-102 · pipeline impact</h2>
+        <p>Sign-off &rarr; IFR &rarr; IFC &rarr; IFF by sheet set. Click a sheet set to see its WPIDs and sheet numbers.</p>
+      </div>
+      <div class="ctrls">
+        <div class="filter" id="filter">
+          <button data-ph="ALL" class="on">All</button>
+          <button data-ph="UG">Underground</button>
+          <button data-ph="AG">Overhead</button>
+        </div>
+        <div class="filter" id="viewsel">
+          <button data-v="sets" class="on">By set</button>
+          <button data-v="sheets">By sheet no.</button>
+        </div>
+        <div class="filter" id="sortsel">
+          <button data-s="sheet" class="on">Sheet no.</button>
+          <button data-s="prio">Priority</button>
+          <button data-s="ifc">IFC date</button>
+        </div>
+        <input id="q" class="find" type="search" placeholder="Find sheet, name or WPID…" autocomplete="off">
+      </div>
+    </div>
+
+    <div class="chips" id="chips"></div>
+
+    <div class="panel" id="idxPanel">
+      <div class="head">
+        <h3>Sheet index</h3>
+        <div class="leg">
+          <span class="sw"><span class="box" style="background:var(--ahead)"></span>In hand</span>
+          <span class="sw"><span class="box" style="background:var(--behind)"></span>Past plan</span>
+          <span class="sw"><span class="box" style="background:#C7D0DB"></span>Forecast</span>
+          <span class="sw"><span class="box" style="background:var(--tight)"></span>Sheet TBC</span>
+        </div>
+      </div>
+      <div class="idx" id="idx"></div>
+    </div>
+
+    <div class="panel">
+      <div class="head">
+        <h3>Live timeline</h3>
+        <div class="leg">
+          <span class="sw"><span class="box" style="background:linear-gradient(90deg,#4C7EF0,#6E97F4)"></span>IFR&rarr;IFC</span>
+          <span class="sw"><span class="box" style="background:#CBD6E6"></span>IFC&rarr;IFF</span>
+          <span class="sw"><span class="dot" style="background:var(--ink)"></span>IFC</span>
+          <span class="sw"><span class="box" style="width:2px;height:13px;background:var(--live)"></span>sheet IFC</span>
+          <span class="sw"><span class="box" style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--tight)"></span>need</span>
+          <span class="sw"><span class="box" style="width:2px;height:13px;background:#B0BAC6"></span>baseline IFC</span>
+        </div>
+      </div>
+      <div class="tl">
+        <div class="axis" id="axis"></div>
+        <div id="lanes"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="head"><h3>Dates &amp; cushion</h3>
+        <div class="leg">
+          <span>Enter a construction-need date to see cushion</span>
+          <span class="colwrap">
+            <button id="colbtn" class="exp alt">Columns</button>
+            <div id="colmenu" class="colmenu"></div>
+          </span>
+          <button id="csv" class="exp" style="display:none">Export CSV</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table id="tbl">
+          <thead><tr>
+            <th>Ph</th>
+            <th>Sheet set</th>
+            <th class="num">Scope</th>
+            <th class="num">Sign-off</th>
+            <th class="num">IFC</th>
+            <th class="num">IFF</th>
+            <th>Construction need</th>
+            <th class="num">Cushion</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div style="padding:12px 16px 16px">
+        <div class="foot">
+          <b>Reading it:</b> The blue delta beside a date is the shift from the current baseline as you move levers. Cushion is business days between IFC and the need date you enter &mdash; <span style="color:var(--ahead)">ahead</span>, <span style="color:var(--tight)">&le;3 days</span>, <span style="color:var(--behind)">behind</span>.
+          <b>Per-sheet dates:</b> Every sheet carries its own <b>IFR</b>, <b>IFC</b> and <b>IFF</b>. Edits cascade downstream &mdash; move a sheet's IFR and its IFC and IFF follow; edit IFC and only IFF follows; edit IFF and it holds. Anything you haven't touched keeps tracking the levers. <span style="color:var(--live)">reset</span> returns all three to plan. A set is <b>gated by its latest sheet</b> at each milestone.
+          <b>Construction need:</b> Set it once on a sheet set and every sheet inherits it, or give a sheet its own date (shown amber) when it differs. Cushion is business days from that sheet's IFC to its need date.
+          <b>Forecast vs in hand:</b> Marking a package <span style="color:var(--ahead)">In hand</span> records it as an actual and pins its date — levers and scenarios no longer move it, so committed deliveries stay put while the rest of the plan flexes. The in-hand count per set is the same signal the Revit MCP feed writes back as % complete.
+          <b>Export CSV</b> writes one row per work package — WPID, sheet no., plan vs delivery date, status, slip, fab release, cushion, and the scenario settings used — ready to paste back into the FORMA_READY workbook.
+          <b>Assumptions:</b> weekends excluded unless toggled, holidays not modeled; IFC&rarr;IFF lag is a placeholder until real fab + ship durations are set.
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="head">
+        <h3>Notes &amp; updates</h3>
+        <div class="leg">
+          <span id="nsave" class="nsave"></span>
+          <button id="ncsv" class="exp alt" style="display:none">Export notes</button>
+          <button id="bkp" class="exp alt" title="Download a .json backup of every date, status and note" style="display:none">Backup</button>
+          <button id="rst" class="exp alt" title="Restore from a .json backup">Restore</button>
+          <input id="rstf" type="file" accept="application/json,.json" style="display:none">
+          <button id="clr" class="exp alt danger" title="Clear saved data from this browser">Clear</button>
+          <button id="syncbtn" class="exp alt" title="Share this tracker with a colleague" style="display:none">Share / sync</button>
+        </div>
+      </div>
+      <div id="syncpanel" class="syncpanel">
+        <div class="srow">
+          <label>Shared endpoint</label>
+          <input id="syncurl" type="url" placeholder="https://your-endpoint.example.com/nova102" autocomplete="off">
+        </div>
+        <div class="srow">
+          <label>Your name</label>
+          <input id="syncwho" type="text" placeholder="your name" autocomplete="off">
+          <button id="pullbtn" class="exp alt">Pull latest</button>
+          <button id="pushbtn" class="exp">Push mine</button>
+          <label class="sauto"><input id="syncauto" type="checkbox"> auto-pull every 60s</label>
+        </div>
+        <div id="syncmsg" class="smsg">Not connected. Paste a shared endpoint to sync this tracker with your colleague.</div>
+      </div>
+      <div class="notes">
+        <div class="nform">
+          <select id="ntag" class="ntag"></select>
+          <input id="ntext" class="ntext" type="text" placeholder="Log an update — commitment, slip, RFI, review comment…" autocomplete="off">
+          <button id="nadd" class="exp">Add note</button>
+        </div>
+        <div id="nlist" class="nlist"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ---------- data (real sign-off anchors from the workbook) ----------
+// ---------- data ----------
+// Sign-off anchors: ARCO clash-free schedule (8/6/26). COLO2 UG restored to 08/19 plan date.
+const ANCHORS = {
+  "C1-UG":"2026-08-12", "AD-UG":"2026-08-13", "C2-UG":"2026-08-19",
+  "C3-UG":"2026-08-26", "C4-UG":"2026-09-02",
+  "AD-AG":"2026-09-16", "C1-AG":"2026-10-12", "C2-AG":"2026-10-19",
+  "C3-AG":"2026-10-26", "C4-AG":"2026-11-02",
+};
+// Sheet groups from NOVA102 UG POWER IFC key plan (page 1).
+// prefix = WPID segment 2 (C1/AD/MY/EY). sheets listed as [zone, sheetNo].
+const GROUPS = [
+  {key:"C1-UG-CDB", prefix:"MY", label:"COLO1 — chiller duct banks", anchor:"C1-UG", ph:"UG",
+   sheets:[["O6",1],["O7",2],["O8",3],["O9",4],["O10",5],["M8",6],["M7",7],["M6",8],["M5",9]]},
+  {key:"C1-UG-C1", prefix:"C1", label:"COLO1 — UG conduit", anchor:"C1-UG", ph:"UG",
+   sheets:[["N1",25],["N2",26],["P1",27],["P2",28],["M1",29],["M2",30],["O1",31],["O2",32]]},
+  {key:"C1-UG-MY", prefix:"MY", label:"MY1 — UG conduit", anchor:"C1-UG", ph:"UG",
+   sheets:[["M3",10],["M2",11],["M1",12],["O1",13],["O2",14],["O3",15],["O4",16],["O5",17],["M4",18],["Q3",24]]},
+  {key:"C1-UG-EY", prefix:"EY", label:"EY1 — UG conduit", anchor:"C1-UG", ph:"UG",
+   sheets:[["R3",21],["N3",null],["N2",33],["N1",34],["P1",35],["P2",36],["P3",37],["P4",38],["P5",39],["N5",40],["N4",41]]},
+  {key:"AD-UG-AD", prefix:"AD", label:"Admin — UG conduit", anchor:"AD-UG", ph:"UG",
+   sheets:[["R1",19],["R2",20],["Q1",22],["Q2",23]]},
+  // Added 09/03/2026: first real per-sheet breakdown for COLO2-4, replacing the
+  // placeholder M1/M2/N1/N2/O1/O2/P1/P2 zone guesses with the actual key-plan zones
+  // now drafted in the model (J/L for COLO2, F/H for COLO3, D for COLO4). Each block
+  // still has 4 more UGC zones + all other work types (DB/GRD/TEL/TP/SEC) not yet
+  // drafted, so the PENDING block-level rows below stay in place for the remainder —
+  // this does mean the wp: counts in PENDING now double-count these WPs; not netted
+  // out below since the exact per-work-type split within the 228 figure isn't known.
+  // Sheet status per live Revit (09/03/2026): J1/J2/L1/L2, F1/F2/H1/H2, D1 all show
+  // "ISSUED FOR REVIEW" (drafted, not yet IFC); D2 already shows "ISSUED FOR
+  // CONSTRUCTION" (IFC). Mark ifrRec/stat yourself once ARCO actually confirms receipt.
+  {key:"C2-UG-C2", prefix:"C2", label:"COLO2 — UG conduit", anchor:"C2-UG", ph:"UG",
+   sheets:[["J1",21],["J2",22],["L1",23],["L2",24]]},
+  {key:"C3-UG-C3", prefix:"C3", label:"COLO3 — UG conduit", anchor:"C3-UG", ph:"UG",
+   sheets:[["F1",21],["F2",22],["H1",23],["H2",24]]},
+  {key:"C4-UG-C4", prefix:"C4", label:"COLO4 — UG conduit", anchor:"C4-UG", ph:"UG",
+   sheets:[["D1",23],["D2",24]]},
+];
+// Blocks without a per-sheet breakdown yet (COLO2-4 UG remainder, all AG) — tracked at block level.
+const PENDING = [
+  {key:"C2-UG", label:"COLO2 / MY2 / EY2 — UG", anchor:"C2-UG", ph:"UG", wp:228},
+  {key:"C3-UG", label:"COLO3 / MY3 / EY3 — UG", anchor:"C3-UG", ph:"UG", wp:228},
+  {key:"C4-UG", label:"COLO4 / MY4 / EY4 — UG", anchor:"C4-UG", ph:"UG", wp:228},
+  {key:"AD-AG", label:"Admin — verticals",       anchor:"AD-AG", ph:"AG", wp:18},
+  {key:"C1-AG", label:"COLO1 / MY1 / EY1 — verticals", anchor:"C1-AG", ph:"AG", wp:156},
+  {key:"C2-AG", label:"COLO2 / MY2 / EY2 — verticals", anchor:"C2-AG", ph:"AG", wp:156},
+  {key:"C3-AG", label:"COLO3 / MY3 / EY3 — verticals", anchor:"C3-AG", ph:"AG", wp:156},
+  {key:"C4-AG", label:"COLO4 / MY4 / EY4 — verticals", anchor:"C4-AG", ph:"AG", wp:156},
+];
+function wpid(prefix,zone){ return `NOVA102.${prefix}.UG.${zone}.UGC`; }
+const TODAY = new Date("2026-09-01T00:00:00");
+
+// ---------- state ----------
+const DEFAULTS = {ifr:3, rev:3, red:0, fin:0, lap:0, fab:5, slip:0};
+let L = {...DEFAULTS};
+let filter = "ALL";
+const needs = {};   // block id -> Date
+// per-sheet milestone overrides: key "groupKey|wpid|stage", stage = ifr | ifc | iff
+const ovD   = {};
+// per-sheet construction need: key "groupKey|wpid" (falls back to the set's need date)
+const needS = {};
+const stat  = {};   // "groupKey|wpid" -> "delivered"  (actual, in hand — pinned, ignores levers)
+const ovO   = {};   // same keys as ovD -> offset in business days from the plan date
+let followMode = true;  // edited forecast dates shift with the levers (actuals never do)
+const ifrRec= {};   // "groupKey|wpid" -> true once the IFR has actually been received
+const hold  = {};   // "groupKey|wpid" -> reason string (dates parked; excluded from cushion + gating)
+const prio  = {};   // "groupKey|wpid" -> 1..6  (1 = do first)
+const alias = {};   // "groupKey|wpid" -> meeting name
+let sortBy = "sheet";  // "sheet" | "prio" | "ifc"
+const hiddenCols = {};   // colKey -> true when hidden
+let view = "sets";  // "sets" | "sheets"
+let query = "";
+let notes = [];     // {id, ts, tag, text}
+const week = {sat:false, sun:false};   // weekend work toggles
+
+// ---------- date utils (business days, weekends only) ----------
+// Working calendar. Saturdays run for as long as the toggle is on; Sundays can be
+// limited to a surge window (e.g. weekend push for two weeks, Saturdays only after).
+let sunUntil = null;                        // Date | null — last Sunday that counts as working
+const MFP = d => { const w=d.getDay(); return w>=1 && w<=5; };   // Mon–Fri baseline
+function isWork(d){
+  const w=d.getDay();
+  if(w>=1 && w<=5) return true;
+  if(w===6) return !!week.sat;
+  if(w===0) return !!week.sun && (!sunUntil || d<=sunUntil);
+  return false;
+}
+function setWork(){ /* calendar is evaluated per date by isWork */ }
+function parseD(s){ return new Date(s+"T00:00:00"); }
+function addBiz(date, n, pred=isWork){
+  const d = new Date(date); let step = n>=0?1:-1, left = Math.abs(n);
+  while(left>0){ d.setDate(d.getDate()+step); if(pred(d)) left--; }
+  return d;
+}
+function bizBetween(a,b,pred=isWork){ // signed working days from a to b
+  if(!a||!b) return null;
+  let lo=a<b?a:b, hi=a<b?b:a, sign=a<b?1:-1, d=new Date(lo), n=0;
+  while(d<hi){ d.setDate(d.getDate()+1); if(pred(d)) n++; }
+  return n*sign;
+}
+function calDays(a,b){ return Math.round((b-a)/86400000); }  // signed calendar days
+const MO=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmt(d){ return d? MO[d.getMonth()]+" "+String(d.getDate()).padStart(2,"0") : "—"; }
+function fmtISO(d){ return d.toISOString().slice(0,10); }
+
+// ---------- compute ----------
+function pipelineBD(){                       // effective sign-off→IFC with overlap
+  const stages=[L.ifr,L.rev,L.red,L.fin].filter(x=>x>0);
+  if(!stages.length) return 0;
+  const sum=stages.reduce((a,b)=>a+b,0);
+  const gaps=stages.length-1;
+  const maxStage=Math.max(...stages);
+  return Math.max(maxStage, sum - L.lap*gaps);   // can't beat the longest single stage
+}
+function compute(){
+  const rows=[];
+  const remain=Math.max(pipelineBD()-L.ifr,0);   // plan days from IFR to IFC
+  GROUPS.forEach(g=>{
+    const so0=parseD(ANCHORS[g.anchor]);
+    const so=addBiz(so0,L.slip);
+    const planIFR=addBiz(so,L.ifr);              // drawing issued for review
+    const planIFC=addBiz(so,pipelineBD());       // issued for construction
+    const planIFF=addBiz(planIFC,L.fab);         // released for fabrication
+    const ifcBase=addBiz(so0,6,MFP);
+    const gNeed=needs[g.key]||null;
+    // each sheet carries its own milestone chain; an edit cascades downstream
+    const sheetList=g.sheets.map(([z,n])=>{
+      const id=wpid(g.prefix,z), k=g.key+"|"+id;
+      const done0=stat[k]==="delivered";
+      // an edited FORECAST keeps its offset from plan (so levers still move it);
+      // an ACTUAL ("in hand") holds the exact date it was recorded at.
+      const gotIFR0=!!ifrRec[k];
+      const res=(stage,baseline)=>{
+        const kk=k+"|"+stage;
+        if(!(kk in ovD)) return null;
+        // actuals never move: a received IFR, or an IFC already in hand
+        if(gotIFR0 && stage==="ifr") return ovD[kk];
+        if(done0 && stage==="ifc") return ovD[kk];
+        if(followMode && (kk in ovO)) return addBiz(baseline, ovO[kk]);
+        return ovD[kk];
+      };
+      const ifr=res("ifr",planIFR)||planIFR;
+      const ifcB=addBiz(ifr,remain);
+      const ifc=res("ifc",ifcB)||ifcB;
+      const iffB=addBiz(ifc,L.fab);
+      const iff=res("iff",iffB)||iffB;
+      const need=needS[k]||gNeed||null;
+      const done=done0;
+      const held=!!hold[k];
+      const gotIFR=gotIFR0;
+      return {zone:z, no:n, wpid:id, ifr, ifc, iff, held, holdWhy:hold[k]||"", gotIFR,
+        baseIFR:planIFR, baseIFC:ifcB, baseIFF:iffB,
+        prio: prio[k]||0, alias: alias[k]||"",
+        oIFR:(k+"|ifr" in ovD), oIFC:(k+"|ifc" in ovD), oIFF:(k+"|iff" in ovD),
+        anyOv:((k+"|ifr" in ovD)||(k+"|ifc" in ovD)||(k+"|iff" in ovD)),
+        ownNeed:!!needS[k], need, done,
+        slipBD:held?0:bizBetween(planIFC,ifc),
+        cush: (need && !held)? bizBetween(ifc,need) : null,
+        seqBad: (ifc<ifr) || (iff<ifc)};
+    }).sort((a,b)=>(a.no===null?9e9:a.no)-(b.no===null?9e9:b.no));
+    // the set is gated by its LAST work package at each milestone
+    const live=sheetList.filter(s=>!s.held);
+    const gate=live.length?live:sheetList;      // if every sheet is held, fall back to all
+    const effIFR=new Date(Math.max(...gate.map(s=>s.ifr)));
+    const effIFC=new Date(Math.max(...gate.map(s=>s.ifc)));
+    const effIFF=new Date(Math.max(...gate.map(s=>s.iff)));
+    const cushes=sheetList.map(s=>s.cush).filter(c=>c!==null);
+    const worstCush=cushes.length? Math.min(...cushes) : null;
+    const needsSet=sheetList.map(s=>s.need).filter(Boolean);
+    const tightestNeed=needsSet.length? new Date(Math.min(...needsSet)) : null;
+    rows.push({kind:"group", key:g.key, prefix:g.prefix, label:g.label, ph:g.ph,
+      anchor:g.anchor, so, ifr:effIFR, ifc:effIFC, iff:effIFF,
+      planIFR, planIFC, planIFF, ifcBase,
+      dIFC:calDays(ifcBase,effIFC), rollupBD:bizBetween(planIFC,effIFC),
+      count:g.sheets.length,
+      nOv:sheetList.filter(s=>s.anyOv).length,
+      nLate:sheetList.filter(s=>s.slipBD>0).length,
+      nDone:sheetList.filter(s=>s.done).length,
+      nHold:sheetList.filter(s=>s.held).length,
+      nAwait:sheetList.filter(s=>!s.held&&!s.done&&!s.gotIFR).length,
+      nWithUs:sheetList.filter(s=>!s.held&&!s.done&&s.gotIFR).length,
+      nBehind:sheetList.filter(s=>s.cush!==null&&s.cush<0).length,
+      nSeq:sheetList.filter(s=>s.seqBad).length,
+      nP1:sheetList.filter(s=>s.prio===1).length,
+      nP1open:sheetList.filter(s=>s.prio===1&&!s.done).length,
+      topPrio:(()=>{const p=sheetList.filter(s=>s.prio).map(s=>s.prio);return p.length?Math.min(...p):0;})(),
+      pct: g.sheets.length? Math.round(100*sheetList.filter(s=>s.done).length/g.sheets.length) : 0,
+      sheetList, need:tightestNeed, cush:worstCush, detail:true});
+  });
+  PENDING.forEach(p=>{
+    const so0=parseD(ANCHORS[p.anchor]);
+    const so=addBiz(so0,L.slip);
+    const ifr=addBiz(so,L.ifr);
+    const ifc=addBiz(so,pipelineBD());
+    const iff=addBiz(ifc,L.fab);
+    const ifcBase=addBiz(so0,6,MFP);
+    const need=needs[p.key]||null;
+    rows.push({kind:"block", key:p.key, label:p.label, ph:p.ph, anchor:p.anchor,
+      so, ifr, ifc, iff, planIFR:ifr, planIFC:ifc, planIFF:iff, ifcBase,
+      dIFC:calDays(ifcBase,ifc), rollupBD:0,
+      count:p.wp, nOv:0, nLate:0, nDone:0, nHold:0, nAwait:0, nWithUs:0, nBehind:0, nSeq:0,
+      nP1:0, nP1open:0, topPrio:0, pct:0, sheetList:null,
+      need, cush: need? bizBetween(ifc,need) : null, detail:false});
+  });
+  return rows;
+}
+
+// ---------- render ----------
+const $ = s=>document.querySelector(s);
+function visible(rows){ return rows.filter(r=>filter==="ALL"||r.ph===filter); }
+// flatten every work package across visible sheet sets, ordered by sheet number
+function allSheets(rows){
+  const out=[];
+  visible(rows).filter(r=>r.detail).forEach(r=>{
+    r.sheetList.forEach(s=>out.push({...s, set:r.label, setKey:r.key, ph:r.ph,
+      planIFR:r.planIFR, planIFC:r.planIFC, planIFF:r.planIFF,
+      setIFC:r.ifc, anchor:r.anchor, so:r.so}));
+  });
+  return sortSheets(out);
+}
+function sortSheets(list){
+  const byNo=(a,b)=>(a.no===null?9e9:a.no)-(b.no===null?9e9:b.no);
+  if(sortBy==="prio") return [...list].sort((a,b)=>
+    ((a.prio||99)-(b.prio||99)) || (a.ifc-b.ifc) || byNo(a,b));
+  if(sortBy==="ifc")  return [...list].sort((a,b)=> (a.ifc-b.ifc) || byNo(a,b));
+  return [...list].sort(byNo);
+}
+function matches(s){
+  if(!query) return true;
+  const q=query.toLowerCase().trim();
+  return String(s.no).includes(q) || s.wpid.toLowerCase().includes(q) ||
+         s.zone.toLowerCase()===q || s.set.toLowerCase().includes(q) ||
+         (s.alias||"").toLowerCase().includes(q);
+}
+
+function renderChips(rows){
+  const vis = visible(rows);
+  const total = pipelineBD();
+  const shifted = vis.filter(r=>r.dIFC!==0).length;
+  const worst = vis.reduce((m,r)=>Math.abs(r.dIFC)>Math.abs(m)?r.dIFC:m, 0);
+  const withNeed = vis.filter(r=>r.cush!==null);
+  const behind = withNeed.filter(r=>r.cush<0).length;
+  const behindChip = withNeed.length
+    ? `<div class="chip ${behind?'flag':'ok'}"><div class="k">Blocks behind need</div><div class="v">${behind}</div><div class="u">of ${withNeed.length} with a need date</div></div>`
+    : `<div class="chip"><div class="k">Blocks behind need</div><div class="v" style="color:var(--faint)">—</div><div class="u">enter need dates below</div></div>`;
+  const worstTxt = worst>0?'+'+worst:(worst<0?String(worst):'0');
+  const worstCls = worst>0?'flag':(worst<0?'ok':'');
+  const lateWP = vis.reduce((a,r)=>a+(r.nLate||0),0);
+  const ovWP = vis.reduce((a,r)=>a+(r.nOv||0),0);
+  const doneWP = vis.reduce((a,r)=>a+(r.nDone||0),0);
+  const totWP = vis.filter(r=>r.detail).reduce((a,r)=>a+r.count,0);
+  const holdWP = vis.reduce((a,r)=>a+(r.nHold||0),0);
+  const awaitWP = vis.reduce((a,r)=>a+(r.nAwait||0),0);
+  const withUsWP = vis.reduce((a,r)=>a+(r.nWithUs||0),0);
+  const wpChip = doneWP
+    ? `<div class="chip ok"><div class="k">Work pkgs in hand</div><div class="v">${doneWP}<span style="font-size:14px;color:var(--faint)">/${totWP}</span></div><div class="u">${holdWP?holdWP+' on hold':(lateWP?lateWP+' past plan':'none past plan')}</div></div>`
+    : (ovWP
+      ? `<div class="chip ${lateWP?'flag':'ok'}"><div class="k">Work pkgs past plan</div><div class="v">${lateWP}</div><div class="u">${ovWP} delivery date${ovWP>1?'s':''} set</div></div>`
+      : `<div class="chip"><div class="k">Work pkgs in hand</div><div class="v" style="color:var(--faint)">—</div><div class="u">of ${totWP} with sheet detail</div></div>`);
+  const p1open = vis.reduce((a,r)=>a+(r.nP1open||0),0);
+  const p1tot  = vis.reduce((a,r)=>a+(r.nP1||0),0);
+  const prioChip = p1tot
+    ? `<div class="chip ${p1open?'flag':'ok'}"><div class="k">P1 outstanding</div><div class="v">${p1open}<span style="font-size:14px;color:var(--faint)">/${p1tot}</span></div><div class="u">${p1open?'complete these first':'all P1 in hand'}</div></div>`
+    : "";
+  const ballChip = (awaitWP||withUsWP)
+    ? `<div class="chip"><div class="k">Awaiting IFR</div><div class="v">${awaitWP}<span style="font-size:14px;color:var(--faint)"> / ${withUsWP} with us</span></div><div class="u">${awaitWP?"still with BES":"nothing outstanding from BES"}</div></div>`
+    : "";
+  $("#chips").innerHTML = `
+    ${ballChip}
+    ${prioChip}
+    <div class="chip"><div class="k">Sign-off &rarr; IFC</div><div class="v">${total}<span style="font-size:14px;color:var(--faint)"> bd</span></div><div class="u">${total===6?'baseline':(total>6?'+'+(total-6)+' vs baseline':(total-6)+' vs baseline')}</div></div>
+    <div class="chip ${worstCls}"><div class="k">Largest IFC shift</div><div class="v">${worstTxt}<span style="font-size:14px;color:var(--faint)"> d</span></div><div class="u">${worst>0?'later than':(worst<0?'earlier than':'vs')} baseline</div></div>
+    ${wpChip}
+    ${behindChip}`;
+}
+
+function axisBounds(rows){
+  const all=[...rows.map(r=>r.so), ...rows.map(r=>r.iff), TODAY];
+  let min=new Date(Math.min(...all)), max=new Date(Math.max(...all));
+  min=new Date(min.getFullYear(),min.getMonth(),1);
+  max=new Date(max.getFullYear(),max.getMonth()+1,7);
+  return {min,max,span:(max-min)};
+}
+function pct(d,B){ return ((d-B.min)/B.span)*100; }
+
+function renderIndex(rows){
+  const sheets=allSheets(rows);
+  const panel=document.getElementById("idxPanel");
+  if(!sheets.length){ panel.style.display="none"; return; }
+  panel.style.display="";
+  $("#idx").innerHTML = sheets.map(s=>{
+    const cls=[ s.held?"onhold":((s.cush!==null&&s.cush<0)?"late":(s.done?"done":(s.slipBD>0?"late":""))),
+                (!s.held&&!s.done&&s.gotIFR)?"gotifr":"", s.no===null?"tbc":"",
+                query?(matches(s)?"hit":"dim"):"" ].filter(Boolean).join(" ");
+    const label=s.no===null?"TBC":String(s.no).padStart(2,"0");
+    const pb=s.prio? `<span class="tp p${s.prio}">${s.prio}</span>` : "";
+    const tip=`${s.alias?s.alias+"\n":""}${s.wpid}\n${s.set}${s.prio?"  \u00b7  P"+s.prio:""}\nIFR ${fmt(s.ifr)}  IFC ${fmt(s.ifc)}  IFF ${fmt(s.iff)}`+
+      `${s.need?`\nNeed ${fmt(s.need)} (cushion ${s.cush}d)`:""}`+
+      `${s.done?"\nIn hand":""}${s.slipBD>0?`\n+${s.slipBD}d past plan`:""}`;
+    return `<div class="sq ${cls}" data-set="${s.setKey}" data-w="${s.wpid}" title="${tip}">
+      ${pb}<span class="n">${label}</span><span class="z">${s.alias||s.zone}</span><span class="st"></span></div>`;
+  }).join("");
+  $("#idx").querySelectorAll(".sq").forEach(el=>{
+    el.addEventListener("click",()=>{
+      expanded[el.dataset.set]=true;
+      query=el.dataset.w;
+      document.getElementById("q").value=query;
+      render();
+      document.getElementById("tbl").scrollIntoView({behavior:"smooth",block:"center"});
+    });
+  });
+}
+
+// shared lane markup for both a set/block row and a nested per-sheet sub-lane
+function laneHTML(o,B){
+  const soX=pct(o.so,B), ifcX=pct(o.ifc,B), iffX=pct(o.iff,B), baseX=pct(o.ifcBase,B), tX=pct(TODAY,B);
+  return `<div class="lane ${o.cls||''}"${o.dataK?` data-k="${o.dataK}"`:''}>
+      <div class="lbl">${o.ph?`<span class="pill ${o.ph}">${o.ph}</span>`:''}<span>${o.label}</span>
+        <span style="color:var(--faint);font-weight:400;font-size:11.5px">${o.cnt||''}</span></div>
+      <div class="track">
+        <div class="today" style="left:${tX}%"></div>
+        <div class="ghost" style="left:${baseX}%"></div>
+        <div class="bar pipe" style="left:${soX}%;width:${Math.max(ifcX-soX,0)}%"></div>
+        <div class="bar fab" style="left:${ifcX}%;width:${Math.max(iffX-ifcX,0)}%"></div>
+        ${o.ticks||''}${o.needMk||''}
+        <div class="mk ifc" style="left:${ifcX}%"></div>
+        <div class="mk iff" style="left:${iffX}%"></div>
+      </div></div>`;
+}
+function renderTimeline(rows){
+  const vis = visible(rows);
+  const B = axisBounds(vis.length?vis:rows);
+  let ax=""; let d=new Date(B.min);
+  while(d<B.max){ ax+=`<span class="mo" style="left:${pct(d,B)}%">${MO[d.getMonth()]}</span>`; d=new Date(d.getFullYear(),d.getMonth()+1,1); }
+  $("#axis").innerHTML = ax;
+  let html="";
+  vis.forEach(r=>{
+    const cnt = r.detail? `${r.count} sheets` : `${r.count} WPs`;
+    const ticks = (r.detail? r.sheetList.filter(s=>s.anyOv) : [])
+      .map(s=>`<div class="tick" style="left:${pct(s.ifc,B)}%" title="${s.wpid} IFC ${fmt(s.ifc)}"></div>`).join("");
+    const needMk = (r.detail? r.sheetList.filter(s=>s.need) : [])
+      .map(s=>`<div class="needmk" style="left:${pct(s.need,B)}%" title="${s.wpid} need ${fmt(s.need)}"></div>`).join("");
+    const twist = r.detail? `<span class="tw ${expanded[r.key]?'open':''}">▸</span>` : `<span class="tw dim">·</span>`;
+    html += laneHTML({label:`${twist}${r.label}`, ph:r.ph, so:r.so, ifc:r.ifc, iff:r.iff, ifcBase:r.ifcBase,
+      cnt, ticks, needMk, cls:r.detail?'clickable':'', dataK:r.detail?r.key:null}, B);
+    // expanded: nest one lane per sheet directly under its set's lane, same as the table below
+    if(r.detail && expanded[r.key]){
+      sortSheets(r.sheetList).forEach(s=>{
+        const sn = s.no===null?"TBC":String(s.no).padStart(2,"0");
+        const label = s.held? `Sheet ${sn} · ${s.alias||s.zone} — on hold` : `Sheet ${sn} · ${s.alias||s.zone}`;
+        const sTicks = s.anyOv? `<div class="tick" style="left:${pct(s.ifc,B)}%" title="${s.wpid} IFC ${fmt(s.ifc)}"></div>` : "";
+        const sNeedMk = s.need? `<div class="needmk" style="left:${pct(s.need,B)}%" title="${s.wpid} need ${fmt(s.need)}"></div>` : "";
+        const stTxt = s.held? '' : (s.done? 'in hand' : (s.gotIFR?'with us':''));
+        html += laneHTML({label, ph:null, so:r.so, ifc:s.ifc, iff:s.iff, ifcBase:r.ifcBase,
+          cnt:stTxt, ticks:sTicks, needMk:sNeedMk, cls:'sublane'+(s.held?' held':(s.done?' done':''))}, B);
+      });
+    }
+  });
+  $("#lanes").innerHTML = html;
+  $("#lanes").querySelectorAll(".lane.clickable").forEach(el=>{
+    el.addEventListener("click",()=>{ const k=el.dataset.k; expanded[k]=!expanded[k]; render(); });
+  });
+  const first=$("#lanes .lane .track"); if(first){ const t=first.querySelector(".today");
+    t.innerHTML=`<span class="cap">today</span>`; }
+}
+
+function deltaTag(n){
+  if(n===null||n===undefined) return "";
+  if(n>0) return `<span class="delta up">+${n}d</span>`;
+  if(n<0) return `<span class="delta down">${n}d</span>`;
+  return "";
+}
+function cushCellHold(r){
+  if(r.held) return `<span class="cush hold">on hold</span>`;
+  return cushCell(r);
+}
+function cushCell(r){
+  if(r.cush===null) return `<span class="cush none">—</span>`;
+  const cls = r.cush<0?"behind":(r.cush<=3?"tight":"ahead");
+  const txt = r.cush<0?`${r.cush} d behind`:(r.cush===0?"0 d":`+${r.cush} d`);
+  return `<span class="cush ${cls}">${txt}</span>`;
+}
+const expanded = {};
+const THEAD_SETS = `<tr><th>Ph</th><th>Sheet set</th><th class="num">Progress</th>
+  <th class="num">Pri</th><th class="num">Sign-off</th><th class="num">IFR</th>
+  <th class="num">IFC</th><th class="num">IFF</th><th class="num">Need</th>
+  <th class="num">Cushion</th></tr>`;
+const THEAD_SHEETS = `<tr><th class="num">Sheet</th><th>Work package</th>
+  <th class="num">Pri</th><th class="num">IFR</th><th class="num">IFC</th>
+  <th class="num">IFF</th><th class="num">Status</th><th>Construction need</th>
+  <th class="num">Cushion</th><th class="num">vs plan</th></tr>`;
+const SUBHEAD = `<tr class="sub subhead"><td></td><td>Work package</td>
+  <td class="num">Pri</td><td class="num">IFR</td><td class="num">IFC</td>
+  <td class="num">IFF</td><td class="num">Status</td><td>Construction need</td>
+  <td class="num">Cushion</td><td class="num">vs plan</td></tr>`;
+// notes tagged to one specific work package, e.g. "wp:C1-UG-C1|NOVA102.C1.UG.N1.UGC"
+function notesFor(k){ return notes.filter(n=>n.tag==="wp:"+k); }
+function notesInline(k){
+  const ns=notesFor(k);
+  if(!ns.length) return "";
+  return `<div class="wpnotes">${ns.map(n=>`<div class="noteline">${n.text.replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</div>`).join("")}</div>`;
+}
+
+function prioCell(setKey,wpid,p){
+  return `<select class="pri p${p||0}" data-g="${setKey}" data-w="${wpid}" title="1 = complete first">
+    ${[0,1,2,3,4,5,6].map(v=>`<option value="${v}"${v===(p||0)?" selected":""}>${v===0?"\u2013":"P"+v}</option>`).join("")}
+  </select>`;
+}
+function aliasCell(setKey,wpid,a){
+  return `<input class="alias" type="text" value="${(a||"").replace(/"/g,"&quot;")}"
+    placeholder="add meeting name\u2026" data-g="${setKey}" data-w="${wpid}"
+    title="What the team calls this in meetings">`;
+}
+function ifrFlag(setKey,wpid,got,done){
+  if(done) return `<span class="ifrf done" title="IFC delivered — IFR stage complete">\u2713</span>`;
+  return `<button class="ifrf ${got?"got":""}" data-g="${setKey}" data-w="${wpid}"
+    title="${got?"IFR received — with us for review. Click to mark as still awaited.":"Awaiting IFR from BES. Click when it arrives."}">${got?"received":"awaiting"}</button>`;
+}
+function statusSeg(setKey,wpid,done,held){
+  const st = held? "hold" : (done? "done" : "fc");
+  return `<span class="seg">
+    <button class="sg ${st==="fc"?"on":""}" data-st="forecast" data-g="${setKey}" data-w="${wpid}">Forecast</button>
+    <button class="sg ${st==="done"?"on done":""}" data-st="delivered" data-g="${setKey}" data-w="${wpid}">In hand</button>
+    <button class="sg ${st==="hold"?"on onhold":""}" data-st="hold" data-g="${setKey}" data-w="${wpid}" title="Dates parked — excluded from cushion and from the set's critical date">Hold</button>
+  </span>`;
+}
+function vsTag(s){
+  if(s.slipBD>0) return `<span class="delta up">+${s.slipBD}d</span>`;
+  if(s.slipBD<0) return `<span class="delta down">${s.slipBD}d</span>`;
+  return s.anyOv? `<span class="delta flat">on plan</span>` : "\u2014";
+}
+// one editable milestone cell
+function mCell(setKey,wpid,stage,date,isOv,locked){
+  return `<input class="ms ${isOv?'set':''} ${locked?'done':''}" type="date" value="${fmtISO(date)}"
+    data-g="${setKey}" data-w="${wpid}" data-s="${stage}"${locked?' title="In hand \u2014 date pinned"':''}>`;
+}
+function needCell(setKey,wpid,s){
+  return `<input class="need2 ${s.ownNeed?'own':''}" type="date" value="${s.need?fmtISO(s.need):''}"
+    data-g="${setKey}" data-w="${wpid}" placeholder="inherits set"
+    title="${s.ownNeed?'Sheet-specific need date':'Inherits the set need date \u2014 type to override'}">`;
+}
+function sheetRowCells(r,s){
+  const warn = s.seqBad? `<span class="warn" title="Out of sequence \u2014 IFC must follow IFR, IFF must follow IFC">!</span>` : "";
+  return `<td class="num">${prioCell(r.key,s.wpid,s.prio)}</td>
+    <td class="num">${mCell(r.key,s.wpid,'ifr',s.ifr,s.oIFR,s.gotIFR)}${ifrFlag(r.key,s.wpid,s.gotIFR,s.done)}</td>
+    <td class="num">${mCell(r.key,s.wpid,'ifc',s.ifc,s.oIFC,s.done)}${warn}</td>
+    <td class="num">${mCell(r.key,s.wpid,'iff',s.iff,s.oIFF,false)}</td>
+    <td class="num">${statusSeg(r.key,s.wpid,s.done,s.held)}</td>
+    <td>${needCell(r.key,s.wpid,s)}</td>
+    <td class="num">${cushCellHold(s)}</td>
+    <td class="num">${vsTag(s)}${s.anyOv?`<button class="clr" data-g="${r.key}" data-w="${s.wpid}" title="Reset all three dates to plan">reset</button>`:''}</td>`;
+}
+
+function renderSheetView(rows){
+  document.querySelector("#tbl thead").innerHTML = THEAD_SHEETS;
+  const sheets=allSheets(rows).filter(matches);
+  const tb=$("#tbl tbody");
+  if(!sheets.length){
+    tb.innerHTML=`<tr><td colspan="10" style="color:var(--faint);padding:16px">No sheet matches \u201c${query}\u201d. Clear the search to see all.</td></tr>`;
+    return;
+  }
+  tb.innerHTML = sheets.map(s=>{
+    const sn = s.no===null? `<span style="color:var(--tight)">TBC</span>` : String(s.no).padStart(2,"0");
+    const late = s.cush!==null&&s.cush<0;
+    const cls = s.held? 'holdRow' : (s.done? 'doneRow' : (s.gotIFR? ('withUs'+(late?' lateEdge':'')) : (late?'behindRow':(s.slipBD>0?'lateRow':''))));
+    return `<tr class="${cls}">
+      <td class="num mono" style="font-weight:650;font-size:13.5px">${sn}</td>
+      <td><span class="mono">${s.wpid}</span>${aliasCell(s.setKey,s.wpid,s.alias)}<span class="setsub">${s.set}</span>${notesInline(s.setKey+"|"+s.wpid)}</td>
+      ${sheetRowCells({key:s.setKey},s)}
+    </tr>`;
+  }).join("");
+}
+
+function renderTable(rows){
+  if(view==="sheets"){ renderSheetView(rows); wireRowInputs(); return; }
+  document.querySelector("#tbl thead").innerHTML = THEAD_SETS;
+  const tb=$("#tbl tbody");
+  let html="";
+  visible(rows).forEach(r=>{
+    const open = !!expanded[r.key];
+    const cnt = r.detail? `${r.count} sheets` : `${r.count} WPs`;
+    const twist = r.detail? `<span class="tw ${open?'open':''}">\u25b8</span>` : `<span class="tw dim">\u00b7</span>`;
+    let roll="";
+    if(r.detail && r.rollupBD>0) roll=`<span class="roll late">+${r.rollupBD}d</span>`;
+    else if(r.detail && r.rollupBD<0) roll=`<span class="roll early">${r.rollupBD}d</span>`;
+    const ovTag = (r.detail && r.nOv)? `<span class="ovc">${r.nOv} edited</span>` : "";
+    const nNotes = r.detail? r.sheetList.reduce((a,s)=>a+notesFor(r.key+"|"+s.wpid).length,0) : 0;
+    const noteTag = nNotes? `<span class="notec">${nNotes} note${nNotes>1?'s':''}</span>` : "";
+    const prog = (r.detail && r.nDone)
+      ? `<span class="prog"><span class="bar2" style="width:${r.pct}%"></span></span><span class="pctxt">${r.nDone}/${r.count}</span>`
+      : `<span style="color:var(--faint)">${cnt}</span>`;
+    html += `<tr class="${r.dIFC!==0?'ifcshift':''} ${r.detail?'clickable':''}" data-k="${r.key}">
+      <td><span class="pill ${r.ph}">${r.ph}</span></td>
+      <td style="font-weight:560">${twist}${r.label}${ovTag}${noteTag}</td>
+      <td class="num">${prog}</td>
+      <td class="num">${r.nP1? `<span class="pbadge p1">${r.nP1open?r.nP1open+" open":"done"}</span>` : (r.topPrio? `<span class="pbadge p${r.topPrio}">P${r.topPrio}</span>` : "")}</td>
+      <td class="num">${fmt(r.so)}</td>
+      <td class="num">${fmt(r.ifr)}</td>
+      <td class="num"><span class="dt">${fmt(r.ifc)}</span>${roll||deltaTag(r.dIFC)}</td>
+      <td class="num">${fmt(r.iff)}</td>
+      <td class="num">${r.detail? (r.need?fmt(r.need):'<input class="need" type="date" value="" data-id="'+r.key+'" title="Sets the default for every sheet in this set">') : '<input class="need" type="date" value="'+(r.need?fmtISO(r.need):'')+'" data-id="'+r.key+'">'}</td>
+      <td class="num">${cushCell(r)}</td></tr>`;
+    if(r.detail && open){
+      html += SUBHEAD;
+      sortSheets(r.sheetList).forEach(s=>{
+        const sn = s.no===null? `<span style="color:var(--tight)">TBC</span>` : `Sheet ${String(s.no).padStart(2,"0")}`;
+        const late = s.cush!==null&&s.cush<0;
+        const cls = s.held? 'holdRow' : (s.done? 'doneRow' : (s.gotIFR? ('withUs'+(late?' lateEdge':'')) : (late?'behindRow':(s.slipBD>0?'lateRow':''))));
+        html += `<tr class="sub ${cls}"><td></td>
+          <td><span class="mono">${s.wpid}</span>${aliasCell(r.key,s.wpid,s.alias)}<span class="setsub">${s.held?`<span class="holdtag">HOLD</span> ${s.holdWhy}`:`${sn} \u00b7 zone ${s.zone}`}</span>${notesInline(r.key+"|"+s.wpid)}</td>
+          ${sheetRowCells(r,s)}</tr>`;
+      });
+      const bits=[];
+      if(r.nLate) bits.push(`${r.nLate} past plan`);
+      if(r.nBehind) bits.push(`${r.nBehind} behind need`);
+      if(r.nDone) bits.push(`${r.nDone} of ${r.count} in hand`);
+      if(r.nSeq) bits.push(`${r.nSeq} out of sequence`);
+      html += `<tr class="sub subfoot"><td></td><td colspan="9">
+        Set gated by its latest sheet \u2014 IFR <b>${fmt(r.ifr)}</b>, IFC <b>${fmt(r.ifc)}</b>, IFF <b>${fmt(r.iff)}</b>.
+        Plan IFC ${fmt(r.planIFC)}${bits.length?' \u00b7 '+bits.join(' \u00b7 '):''}.
+        </td></tr>`;
+    }
+  });
+  tb.innerHTML=html;
+  tb.querySelectorAll("tr.clickable").forEach(tr=>{
+    tr.addEventListener("click",e=>{
+      if(e.target.tagName==="INPUT"||e.target.tagName==="BUTTON") return;
+      const k=tr.dataset.k; expanded[k]=!expanded[k]; render();
+    });
+  });
+  wireRowInputs();
+}
+
+function wireRowInputs(){
+  const tb=$("#tbl tbody");
+  // set-level need date (default for every sheet in the set)
+  tb.querySelectorAll("input.need").forEach(inp=>{
+    inp.addEventListener("click",e=>e.stopPropagation());
+    inp.addEventListener("change",e=>{
+      const id=e.target.dataset.id, v=e.target.value;
+      if(v) needs[id]=new Date(v+"T00:00:00"); else delete needs[id];
+      render();
+    });
+  });
+  // per-sheet milestone dates (IFR / IFC / IFF) — an edit cascades downstream
+  tb.querySelectorAll("input.ms").forEach(inp=>{
+    inp.addEventListener("click",e=>e.stopPropagation());
+    inp.addEventListener("change",e=>{
+      const t=e.target, stage=t.dataset.s;
+      const k=t.dataset.g+"|"+t.dataset.w+"|"+stage;
+      if(t.value){
+        const nd=new Date(t.value+"T00:00:00");
+        ovD[k]=nd;
+        // record how far this sits from its plan date, so levers can still move it
+        const row=compute().find(x=>x.key===t.dataset.g);
+        const s=row&&row.sheetList.find(x=>x.wpid===t.dataset.w);
+        const base=s? (stage==="ifr"?s.baseIFR:stage==="ifc"?s.baseIFC:s.baseIFF) : null;
+        if(base) ovO[k]=bizBetween(base,nd);
+      } else { delete ovD[k]; delete ovO[k]; }
+      render();
+    });
+  });
+  // per-sheet construction need
+  tb.querySelectorAll("input.need2").forEach(inp=>{
+    inp.addEventListener("click",e=>e.stopPropagation());
+    inp.addEventListener("change",e=>{
+      const t=e.target, k=t.dataset.g+"|"+t.dataset.w;
+      if(t.value) needS[k]=new Date(t.value+"T00:00:00"); else delete needS[k];
+      render();
+    });
+  });
+  // reset all three dates for a sheet back to plan
+  tb.querySelectorAll("button.clr").forEach(b=>{
+    b.addEventListener("click",e=>{
+      e.stopPropagation();
+      const base=b.dataset.g+"|"+b.dataset.w;
+      ["ifr","ifc","iff"].forEach(s=>{delete ovD[base+"|"+s]; delete ovO[base+"|"+s];});
+      delete stat[base];
+      render();
+    });
+  });
+  // priority
+  tb.querySelectorAll("select.pri").forEach(sel=>{
+    sel.addEventListener("click",e=>e.stopPropagation());
+    sel.addEventListener("change",e=>{
+      const t=e.target, k=t.dataset.g+"|"+t.dataset.w, v=parseInt(t.value,10);
+      if(v) prio[k]=v; else delete prio[k];
+      render();
+    });
+  });
+  // meeting name
+  tb.querySelectorAll("input.alias").forEach(inp=>{
+    inp.addEventListener("click",e=>e.stopPropagation());
+    inp.addEventListener("change",e=>{
+      const t=e.target, k=t.dataset.g+"|"+t.dataset.w, v=t.value.trim();
+      if(v) alias[k]=v; else delete alias[k];
+      render();
+    });
+    inp.addEventListener("keydown",e=>{ if(e.key==="Enter") e.target.blur(); });
+  });
+  // forecast / in hand
+  tb.querySelectorAll("button.ifrf").forEach(b=>{
+    b.addEventListener("click",e=>{
+      e.stopPropagation();
+      const k=b.dataset.g+"|"+b.dataset.w;
+      if(ifrRec[k]) { delete ifrRec[k]; }
+      else {
+        ifrRec[k]=true;
+        // an IFR that has actually arrived is an actual — pin it so levers can't move it
+        if(!ovD[k+"|ifr"]){
+          const row=compute().find(x=>x.key===b.dataset.g);
+          const s=row.sheetList.find(x=>x.wpid===b.dataset.w);
+          if(s){ ovD[k+"|ifr"]=new Date(s.ifr); ovO[k+"|ifr"]=0; }
+        }
+      }
+      render();
+    });
+  });
+  tb.querySelectorAll("button.sg").forEach(b=>{
+    b.addEventListener("click",e=>{
+      e.stopPropagation();
+      const base=b.dataset.g+"|"+b.dataset.w;
+      if(b.dataset.st==="hold"){
+        const cur=hold[base]||"";
+        const why=prompt("Why are these dates parked? (shown on the row and in exports)", cur||"Site conditions — construction cannot proceed");
+        if(why===null) return;
+        hold[base]=why.trim()||"On hold";
+        delete stat[base];
+        render(); return;
+      }
+      delete hold[base];
+      if(b.dataset.st==="delivered"){
+        {
+          const row=compute().find(x=>x.key===b.dataset.g);
+          const s=row.sheetList.find(x=>x.wpid===b.dataset.w);
+          ovD[base+"|ifc"]=new Date(s.ifc);   // pin the actual where it stands
+        }
+        stat[base]="delivered";
+      } else { delete stat[base]; }
+      render();
+    });
+  });
+}
+
+function syncLevers(){
+  document.querySelectorAll(".lever").forEach(el=>{
+    const k=el.dataset.lever, v=L[k];
+    const unit=(k==="slip")?(v>0?`+${v} bd`:`${v} bd`):`${v} bd`;
+    const valEl=el.querySelector(".val"); valEl.textContent=unit;
+    valEl.classList.toggle("changed", v!==DEFAULTS[k]);
+    el.querySelector("input").value=v;
+  });
+}
+
+// ---------- column visibility ----------
+// index -> column key, per row shape (the shapes differ, so map each separately)
+const MAP_SETROW   = [null,null,"progress","pri","signoff","ifr","ifc","iff","need","cushion"];
+const MAP_SUBROW   = [null,null,"pri","ifr","ifc","iff","status","need","cushion","vsplan"];
+const MAP_SHEETROW = [null,null,"pri","ifr","ifc","iff","status","need","cushion","vsplan"];
+const COLDEFS = [
+  {k:"progress",l:"Progress",v:"sets"},
+  {k:"pri",     l:"Priority"},
+  {k:"signoff", l:"Sign-off",v:"sets"},
+  {k:"ifr",     l:"IFR"},
+  {k:"ifc",     l:"IFC"},
+  {k:"iff",     l:"IFF"},
+  {k:"status",  l:"Status"},
+  {k:"need",    l:"Construction need"},
+  {k:"cushion", l:"Cushion"},
+  {k:"vsplan",  l:"vs plan"},
+];
+function applyColVis(){
+  const headMap = view==="sheets" ? MAP_SHEETROW : MAP_SETROW;
+  const thead=document.querySelector("#tbl thead tr");
+  if(thead) [...thead.children].forEach((th,i)=>{
+    const k=headMap[i]; th.style.display = (k&&hiddenCols[k])?"none":"";
+  });
+  let visCount=headMap.filter((k,i)=>!(k&&hiddenCols[k])).length;
+  document.querySelectorAll("#tbl tbody tr").forEach(tr=>{
+    if(tr.classList.contains("subfoot")){
+      const td=tr.children[1]; if(td) td.setAttribute("colspan",String(Math.max(visCount-1,1)));
+      return;
+    }
+    const only=tr.children.length===1?tr.children[0]:null;
+    if(only && only.getAttribute("colspan")){ only.setAttribute("colspan",String(visCount)); return; }
+    const map = tr.classList.contains("sub") ? MAP_SUBROW
+              : (view==="sheets" ? MAP_SHEETROW : MAP_SETROW);
+    [...tr.children].forEach((td,i)=>{
+      const k=map[i]; td.style.display = (k&&hiddenCols[k])?"none":"";
+    });
+  });
+}
+function renderColMenu(){
+  const m=document.getElementById("colmenu");
+  const items=COLDEFS.filter(c=>!c.v || c.v===view || view!=="sheets");
+  m.innerHTML = items.map(c=>
+    `<label class="ci"><input type="checkbox" data-c="${c.k}" ${hiddenCols[c.k]?"":"checked"}> ${c.l}</label>`
+  ).join("") + `<div class="cdiv"></div>
+    <button class="call" data-all="show">Show all</button>`;
+  m.querySelectorAll("input[data-c]").forEach(inp=>{
+    inp.addEventListener("change",e=>{
+      const k=e.target.dataset.c;
+      if(e.target.checked) delete hiddenCols[k]; else hiddenCols[k]=true;
+      applyColVis(); stateSave();
+    });
+  });
+  m.querySelector('[data-all="show"]').addEventListener("click",()=>{
+    Object.keys(hiddenCols).forEach(k=>delete hiddenCols[k]);
+    renderColMenu(); applyColVis(); stateSave();
+  });
+}
+
+function render(){
+  const rows=compute();
+  syncLevers();
+  renderChips(rows);
+  renderIndex(rows);
+  renderTimeline(rows);
+  renderTable(rows);
+  renderNotes(rows);
+  applyColVis();
+  renderColMenu();
+  stateSave();
+}
+
+// ---------- CSV export ----------
+function scenarioStr(){
+  const wk = ((week.sat?"Sat":"")+(week.sun?(week.sat?"+Sun":"Sun"):"")) || "Mon-Fri";
+  return `IFR ${L.ifr} / IFR-rev ${L.rev} / Redline ${L.red} / IFC-rev ${L.fin} / overlap ${L.lap} / fab ${L.fab} / slip ${L.slip} / ${wk}`;
+}
+function q(v){ v=(v===null||v===undefined)?"":String(v);
+  return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function isoOrBlank(d){ return d? fmtISO(d) : ""; }
+function buildCSV(){
+  const rows=compute();
+  const head=["Priority","Name (meeting)","Sheet Set","Phase","Anchor Block","Zone","Sheet No","WPID","Sign-Off",
+    "IFR","IFC","IFF","Status","Plan IFC","Slip vs Plan (bd)",
+    "Construction Need","Need Source","Cushion (bd)","IFR Received","On Hold","Hold Reason","Sequence OK",
+    "Set IFR (rollup)","Set IFC (rollup)","Set IFF (rollup)","Scenario"];
+  const out=[head.join(",")];
+  rows.forEach(r=>{
+    if(r.detail){
+      sortSheets(r.sheetList).forEach(s=>{
+        out.push([s.prio?("P"+s.prio):"", s.alias||"", r.label,r.ph,r.anchor,s.zone,
+          s.no===null?"TBC":s.no, s.wpid, isoOrBlank(r.so),
+          isoOrBlank(s.ifr), isoOrBlank(s.ifc), isoOrBlank(s.iff),
+          s.held?"On hold":(s.done?"In hand (actual)":"Forecast"),
+          isoOrBlank(r.planIFC), s.slipBD,
+          isoOrBlank(s.need), s.need?(s.ownNeed?"sheet":"set"):"",
+          (s.cush===null?"":s.cush), s.done?"n/a (IFC in hand)":(s.gotIFR?"RECEIVED":"awaiting"),
+          s.held?"HOLD":"", s.holdWhy||"", s.seqBad?"NO":"yes",
+          isoOrBlank(r.ifr), isoOrBlank(r.ifc), isoOrBlank(r.iff), scenarioStr()
+        ].map(q).join(","));
+      });
+    } else {
+      out.push(["","",r.label,r.ph,r.anchor,"","","(sheet list not issued)",isoOrBlank(r.so),
+        isoOrBlank(r.ifr),isoOrBlank(r.ifc),isoOrBlank(r.iff),"Block level",
+        isoOrBlank(r.planIFC),"",isoOrBlank(r.need),r.need?"set":"",
+        (r.cush===null?"":r.cush),"","","","yes",
+        isoOrBlank(r.ifr),isoOrBlank(r.ifc),isoOrBlank(r.iff),scenarioStr()].map(q).join(","));
+    }
+  });
+  return out.join("\n");
+}
+function downloadCSV(){
+  const blob=new Blob([buildCSV()],{type:"text/csv;charset=utf-8;"});
+  const a=document.createElement("a");
+  const d=new Date();
+  const stamp=d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0");
+  a.href=URL.createObjectURL(blob);
+  a.download=`Nova102_WP_delivery_${stamp}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+
+// ---------- notes ----------
+// ---------- persistence: whole working state ----------
+// ---------- published snapshot (baked in at publish time; this is what every viewer sees on load) ----------
+const SEED_STATE = {"v": 2, "L": {"ifr": 2, "rev": 0, "red": 0, "fin": 0, "lap": 0, "fab": 0, "slip": 0}, "week": {"sat": true, "sun": true}, "view": "sets", "sortBy": "prio", "needs": {"C2-UG": "2026-09-03"}, "needS": {"C1-UG-MY|NOVA102.MY.UG.M3.UGC": "2026-09-01", "C1-UG-MY|NOVA102.MY.UG.M2.UGC": "2026-09-01", "C1-UG-C1|NOVA102.C1.UG.N1.UGC": "2026-09-08", "C1-UG-C1|NOVA102.C1.UG.M1.UGC": "2026-09-08", "C1-UG-CDB|NOVA102.MY.UG.O6.UGC": "2026-08-24", "C1-UG-CDB|NOVA102.MY.UG.O7.UGC": "2026-08-24", "C1-UG-CDB|NOVA102.MY.UG.O8.UGC": "2026-08-24", "C1-UG-CDB|NOVA102.MY.UG.O9.UGC": "2026-08-24", "C1-UG-CDB|NOVA102.MY.UG.O10.UGC": "2026-08-24", "C1-UG-CDB|NOVA102.MY.UG.M8.UGC": "2026-08-24", "C1-UG-CDB|NOVA102.MY.UG.M7.UGC": "2026-08-24", "C1-UG-CDB|NOVA102.MY.UG.M6.UGC": "2026-08-24", "C1-UG-CDB|NOVA102.MY.UG.M5.UGC": "2026-08-24", "C1-UG-MY|NOVA102.MY.UG.M1.UGC": "2026-09-03", "C1-UG-MY|NOVA102.MY.UG.O1.UGC": "2026-09-03", "C1-UG-MY|NOVA102.MY.UG.O2.UGC": "2026-09-03", "AD-UG-AD|NOVA102.AD.UG.R1.UGC": "2026-08-26", "AD-UG-AD|NOVA102.AD.UG.R2.UGC": "2026-08-26", "C1-UG-EY|NOVA102.EY.UG.R3.UGC": "2026-08-26", "AD-UG-AD|NOVA102.AD.UG.Q1.UGC": "2026-08-26", "AD-UG-AD|NOVA102.AD.UG.Q2.UGC": "2026-08-26", "C1-UG-MY|NOVA102.MY.UG.Q3.UGC": "2026-08-26", "C1-UG-C1|NOVA102.C1.UG.P2.UGC": "2026-09-03", "C1-UG-C1|NOVA102.C1.UG.O2.UGC": "2026-09-03", "C1-UG-C1|NOVA102.C1.UG.O1.UGC": "2026-09-04", "C1-UG-C1|NOVA102.C1.UG.P1.UGC": "2026-09-04", "C1-UG-C1|NOVA102.C1.UG.M2.UGC": "2026-09-07", "C1-UG-C1|NOVA102.C1.UG.N2.UGC": "2026-09-07"}, "ovD": {"C1-UG-MY|NOVA102.MY.UG.M2.UGC|ifc": "2026-09-01", "C1-UG-MY|NOVA102.MY.UG.M3.UGC|ifc": "2026-09-01", "C1-UG-CDB|NOVA102.MY.UG.O6.UGC|ifc": "2026-08-17", "C1-UG-CDB|NOVA102.MY.UG.O7.UGC|ifc": "2026-08-17", "C1-UG-CDB|NOVA102.MY.UG.O8.UGC|ifc": "2026-08-17", "C1-UG-CDB|NOVA102.MY.UG.O9.UGC|ifc": "2026-08-17", "C1-UG-CDB|NOVA102.MY.UG.O10.UGC|ifc": "2026-08-17", "C1-UG-CDB|NOVA102.MY.UG.M5.UGC|ifc": "2026-08-17", "AD-UG-AD|NOVA102.AD.UG.Q2.UGC|ifc": "2026-08-19", "C1-UG-CDB|NOVA102.MY.UG.M8.UGC|ifc": "2026-08-17", "C1-UG-CDB|NOVA102.MY.UG.M7.UGC|ifc": "2026-08-17", "C1-UG-CDB|NOVA102.MY.UG.M6.UGC|ifc": "2026-08-17", "C1-UG-C1|NOVA102.C1.UG.O1.UGC|ifr": "2026-09-04", "C1-UG-C1|NOVA102.C1.UG.P2.UGC|ifr": "2026-09-03", "C1-UG-C1|NOVA102.C1.UG.O2.UGC|ifr": "2026-09-03", "AD-UG-AD|NOVA102.AD.UG.R1.UGC|ifc": "2026-08-19", "AD-UG-AD|NOVA102.AD.UG.R2.UGC|ifc": "2026-08-19", "C1-UG-EY|NOVA102.EY.UG.R3.UGC|ifc": "2026-08-19", "AD-UG-AD|NOVA102.AD.UG.Q1.UGC|ifc": "2026-08-19", "C1-UG-MY|NOVA102.MY.UG.Q3.UGC|ifc": "2026-08-19", "C1-UG-C1|NOVA102.C1.UG.P1.UGC|ifr": "2026-09-04", "C1-UG-C1|NOVA102.C1.UG.M1.UGC|ifr": "2026-09-12", "C1-UG-MY|NOVA102.MY.UG.O1.UGC|ifr": "2026-09-10", "C1-UG-C1|NOVA102.C1.UG.M2.UGC|ifr": "2026-09-11", "C1-UG-C1|NOVA102.C1.UG.N2.UGC|ifr": "2026-09-11", "C1-UG-MY|NOVA102.MY.UG.M1.UGC|ifr": "2026-09-10", "C1-UG-C1|NOVA102.C1.UG.N1.UGC|ifr": "2026-09-11", "C1-UG-MY|NOVA102.MY.UG.O2.UGC|ifr": "2026-09-11"}, "ovO": {"C1-UG-MY|NOVA102.MY.UG.M2.UGC|ifc": 14, "C1-UG-MY|NOVA102.MY.UG.M3.UGC|ifc": 14, "C1-UG-CDB|NOVA102.MY.UG.O6.UGC|ifc": 1, "C1-UG-CDB|NOVA102.MY.UG.O7.UGC|ifc": 1, "C1-UG-CDB|NOVA102.MY.UG.O8.UGC|ifc": 1, "C1-UG-CDB|NOVA102.MY.UG.O9.UGC|ifc": 1, "C1-UG-CDB|NOVA102.MY.UG.O10.UGC|ifc": 1, "C1-UG-CDB|NOVA102.MY.UG.M5.UGC|ifc": 1, "AD-UG-AD|NOVA102.AD.UG.Q2.UGC|ifc": 2, "C1-UG-CDB|NOVA102.MY.UG.M8.UGC|ifc": 1, "C1-UG-CDB|NOVA102.MY.UG.M7.UGC|ifc": 1, "C1-UG-CDB|NOVA102.MY.UG.M6.UGC|ifc": 1, "C1-UG-C1|NOVA102.C1.UG.O1.UGC|ifr": 21, "C1-UG-C1|NOVA102.C1.UG.P2.UGC|ifr": 20, "C1-UG-C1|NOVA102.C1.UG.O2.UGC|ifr": 20, "AD-UG-AD|NOVA102.AD.UG.R1.UGC|ifc": 2, "AD-UG-AD|NOVA102.AD.UG.R2.UGC|ifc": 2, "C1-UG-EY|NOVA102.EY.UG.R3.UGC|ifc": 3, "AD-UG-AD|NOVA102.AD.UG.Q1.UGC|ifc": 2, "C1-UG-MY|NOVA102.MY.UG.Q3.UGC|ifc": 3, "C1-UG-C1|NOVA102.C1.UG.P1.UGC|ifr": 21, "C1-UG-C1|NOVA102.C1.UG.M1.UGC|ifr": 29, "C1-UG-MY|NOVA102.MY.UG.O1.UGC|ifr": 27, "C1-UG-C1|NOVA102.C1.UG.M2.UGC|ifr": 24, "C1-UG-C1|NOVA102.C1.UG.N2.UGC|ifr": 24, "C1-UG-MY|NOVA102.MY.UG.M1.UGC|ifr": 27, "C1-UG-C1|NOVA102.C1.UG.N1.UGC|ifr": 28, "C1-UG-MY|NOVA102.MY.UG.O2.UGC|ifr": 28}, "followMode": true, "sunUntil": "2026-09-13", "stat": {"C1-UG-MY|NOVA102.MY.UG.M2.UGC": "delivered", "C1-UG-MY|NOVA102.MY.UG.M3.UGC": "delivered", "C1-UG-CDB|NOVA102.MY.UG.O6.UGC": "delivered", "C1-UG-CDB|NOVA102.MY.UG.O7.UGC": "delivered", "C1-UG-CDB|NOVA102.MY.UG.O8.UGC": "delivered", "C1-UG-CDB|NOVA102.MY.UG.O9.UGC": "delivered", "C1-UG-CDB|NOVA102.MY.UG.O10.UGC": "delivered", "C1-UG-CDB|NOVA102.MY.UG.M8.UGC": "delivered", "C1-UG-CDB|NOVA102.MY.UG.M7.UGC": "delivered", "C1-UG-CDB|NOVA102.MY.UG.M6.UGC": "delivered", "C1-UG-CDB|NOVA102.MY.UG.M5.UGC": "delivered", "AD-UG-AD|NOVA102.AD.UG.R1.UGC": "delivered", "AD-UG-AD|NOVA102.AD.UG.R2.UGC": "delivered", "C1-UG-EY|NOVA102.EY.UG.R3.UGC": "delivered", "AD-UG-AD|NOVA102.AD.UG.Q1.UGC": "delivered", "AD-UG-AD|NOVA102.AD.UG.Q2.UGC": "delivered", "C1-UG-MY|NOVA102.MY.UG.Q3.UGC": "delivered"}, "hold": {"C1-UG-MY|NOVA102.MY.UG.O3.UGC": "Site conditions — construction cannot proceed", "C1-UG-MY|NOVA102.MY.UG.O4.UGC": "Site conditions — construction cannot proceed", "C1-UG-MY|NOVA102.MY.UG.O5.UGC": "Site conditions — construction cannot proceed", "C1-UG-MY|NOVA102.MY.UG.M4.UGC": "Site conditions — construction cannot proceed", "C1-UG-EY|NOVA102.EY.UG.N1.UGC": "Site conditions — construction cannot proceed", "C1-UG-EY|NOVA102.EY.UG.P1.UGC": "Site conditions — construction cannot proceed", "C1-UG-EY|NOVA102.EY.UG.P2.UGC": "Site conditions — construction cannot proceed", "C1-UG-EY|NOVA102.EY.UG.P3.UGC": "Site conditions — construction cannot proceed", "C1-UG-EY|NOVA102.EY.UG.P4.UGC": "Site conditions — construction cannot proceed", "C1-UG-EY|NOVA102.EY.UG.P5.UGC": "Site conditions — construction cannot proceed", "C1-UG-EY|NOVA102.EY.UG.N5.UGC": "Site conditions — construction cannot proceed", "C1-UG-EY|NOVA102.EY.UG.N4.UGC": "Site conditions — construction cannot proceed", "C1-UG-EY|NOVA102.EY.UG.N3.UGC": "Site conditions — construction cannot proceed", "C1-UG-EY|NOVA102.EY.UG.N2.UGC": "Site conditions — construction cannot proceed"}, "ifrRec": {"C1-UG-C1|NOVA102.C1.UG.P2.UGC": true, "C1-UG-C1|NOVA102.C1.UG.O2.UGC": true}, "prio": {"C1-UG-MY|NOVA102.MY.UG.M1.UGC": 1, "C1-UG-MY|NOVA102.MY.UG.O1.UGC": 1, "C1-UG-MY|NOVA102.MY.UG.O2.UGC": 1, "C1-UG-C1|NOVA102.C1.UG.O2.UGC": 2, "C1-UG-C1|NOVA102.C1.UG.P1.UGC": 3, "C1-UG-C1|NOVA102.C1.UG.O1.UGC": 3, "C1-UG-C1|NOVA102.C1.UG.M1.UGC": 1, "C1-UG-C1|NOVA102.C1.UG.N1.UGC": 1, "C1-UG-C1|NOVA102.C1.UG.P2.UGC": 2, "C1-UG-C1|NOVA102.C1.UG.N2.UGC": 4, "C1-UG-C1|NOVA102.C1.UG.M2.UGC": 4}, "alias": {"C1-UG-MY|NOVA102.MY.UG.M3.UGC": "Generator MV Loop B", "C1-UG-MY|NOVA102.MY.UG.M2.UGC": "Generator MV Loop B", "C1-UG-MY|NOVA102.MY.UG.M1.UGC": "Generator and LV", "C1-UG-MY|NOVA102.MY.UG.O1.UGC": "Generator and LV", "C1-UG-MY|NOVA102.MY.UG.O2.UGC": "Generator and LV", "C1-UG-MY|NOVA102.MY.UG.O3.UGC": "Backfill Area", "C1-UG-MY|NOVA102.MY.UG.O4.UGC": "Backfill Area", "C1-UG-MY|NOVA102.MY.UG.O5.UGC": "Backfill Area", "C1-UG-MY|NOVA102.MY.UG.M4.UGC": "Backfill Area", "AD-UG-AD|NOVA102.AD.UG.R1.UGC": "Temp Power and MV A", "AD-UG-AD|NOVA102.AD.UG.R2.UGC": "Temp Power", "C1-UG-EY|NOVA102.EY.UG.R3.UGC": "Temp Power and EV", "AD-UG-AD|NOVA102.AD.UG.Q1.UGC": "MV Loop A and EV", "AD-UG-AD|NOVA102.AD.UG.Q2.UGC": "EV", "C1-UG-MY|NOVA102.MY.UG.Q3.UGC": "EV", "C1-UG-C1|NOVA102.C1.UG.N1.UGC": "Gen TP LV", "C1-UG-C1|NOVA102.C1.UG.N2.UGC": "TP LV", "C1-UG-C1|NOVA102.C1.UG.P1.UGC": "TP LV", "C1-UG-C1|NOVA102.C1.UG.P2.UGC": "TP LV", "C1-UG-C1|NOVA102.C1.UG.M1.UGC": "Gen Feed", "C1-UG-C1|NOVA102.C1.UG.M2.UGC": "LV", "C1-UG-C1|NOVA102.C1.UG.O1.UGC": "LV", "C1-UG-C1|NOVA102.C1.UG.O2.UGC": "LV"}, "hiddenCols": {"iff": true, "vsplan": true}, "expanded": {"C1-UG-C1": false, "C1-UG-MY": true}, "notes": [{"id": "17883639977038zfl", "ts": 1788363997703, "tag": "wp:C1-UG-C1|NOVA102.C1.UG.N1.UGC", "text": "Missing Generator Lines"}, {"id": "1788364003195fry4", "ts": 1788364003195, "tag": "wp:C1-UG-C1|NOVA102.C1.UG.M1.UGC", "text": "Missing Generator Lines"}, {"id": "1788445261566861n", "ts": 1788445261566, "tag": "wp:C1-UG-C1|NOVA102.C1.UG.P2.UGC", "text": "Justin holding the IFR while he determines Detail vs Schedule discrepancy"}, {"id": "1788445267079gwpi", "ts": 1788445267079, "tag": "wp:C1-UG-C1|NOVA102.C1.UG.O2.UGC", "text": "Justin holding the IFR while he determines Detail vs Schedule discrepancy"}, {"id": "17884479363412g34", "ts": 1788447936341, "tag": "wp:C1-UG-MY|NOVA102.MY.UG.M1.UGC", "text": "Conduit upsize per RFI 6.1"}, {"id": "17884479494732pfw", "ts": 1788447949473, "tag": "wp:C1-UG-MY|NOVA102.MY.UG.O1.UGC", "text": "Conduit upsize per RFI 6.1"}, {"id": "17884479651263on8", "ts": 1788447965126, "tag": "wp:C1-UG-C1|NOVA102.C1.UG.N1.UGC", "text": "Conduit upsize per RFI 6.1"}, {"id": "1788447982248ec86", "ts": 1788447982248, "tag": "wp:C1-UG-C1|NOVA102.C1.UG.M1.UGC", "text": "Conduit upsize per RFI 6.1"}, {"id": "1788447992721hpiv", "ts": 1788447992721, "tag": "wp:C1-UG-MY|NOVA102.MY.UG.O2.UGC", "text": "Conduit upsize per RFI 6.1"}, {"id": "1788533115421o8ov", "ts": 1788533115421, "tag": "wp:C1-UG-CDB|NOVA102.MY.UG.O8.UGC", "text": "Model check 9/4: BES reassigning O8 feeder runs (MSB-MY1-1/2/7/8 to UPS-MY1) from underground to overhead workset. Sheet already delivered 8/17 — confirm with BES whether ARCO needs a hold before continuing install."}, {"id": "1788533116421m3rv", "ts": 1788533116421, "tag": "wp:C1-UG-MY|NOVA102.MY.UG.M3.UGC", "text": "BES email 9/4: telecom conduit growth is forcing MV rack coordination — this sheet will be reissued once that's done, expected week of 9/11. Already delivered 9/1 as Generator MV Loop B — flag to ARCO that a revision is coming."}, {"id": "1788533117421o1ni", "ts": 1788533117421, "tag": "wp:C1-UG-C1|NOVA102.C1.UG.O1.UGC", "text": "Model check 9/4: no revision/issue history found in Revit for this sheet despite hitting its construction need date today with zero cushion, and it's not in BES's 9/4 issue list either — follow up directly."}], "savedAt": 1788533115421};
+const SEED_PUSHED_BY = "David Campbell";
+const SEED_PUSHED_AT = 1788533115421;
+
+const SKEY="nova102_state_v2";
+let storageOK=true;
+function dmap(o){ const r={}; Object.keys(o).forEach(k=>r[k]=fmtISO(o[k])); return r; }
+function undmap(o){ const r={}; Object.keys(o||{}).forEach(k=>r[k]=new Date(o[k]+"T00:00:00")); return r; }
+function snapshot(){
+  return {v:2, L:{...L}, week:{...week}, view, sortBy,
+    needs:dmap(needs), needS:dmap(needS), ovD:dmap(ovD), ovO:{...ovO}, followMode, sunUntil: sunUntil? fmtISO(sunUntil):null,
+    stat:{...stat}, hold:{...hold}, ifrRec:{...ifrRec}, prio:{...prio}, alias:{...alias},
+    hiddenCols:{...hiddenCols},
+    expanded:{...expanded}, notes, savedAt:Date.now()};
+}
+function applyState(st){
+  if(!st) return;
+  if(st.L) Object.keys(DEFAULTS).forEach(k=>{ if(typeof st.L[k]==="number") L[k]=st.L[k]; });
+  if(st.week){ week.sat=!!st.week.sat; week.sun=!!st.week.sun; }
+  if(st.view) view=st.view;
+  Object.keys(needs).forEach(k=>delete needs[k]);
+  Object.assign(needs, undmap(st.needs));
+  Object.keys(needS).forEach(k=>delete needS[k]);
+  Object.assign(needS, undmap(st.needS));
+  Object.keys(ovD).forEach(k=>delete ovD[k]);
+  Object.assign(ovD, undmap(st.ovD));
+  Object.keys(ovO).forEach(k=>delete ovO[k]);
+  Object.assign(ovO, st.ovO||{});
+  if(typeof st.followMode==="boolean") followMode=st.followMode;
+  sunUntil = st.sunUntil? new Date(st.sunUntil+"T00:00:00") : null;
+  Object.keys(stat).forEach(k=>delete stat[k]);
+  Object.assign(stat, st.stat||{});
+  Object.keys(hold).forEach(k=>delete hold[k]);
+  Object.assign(hold, st.hold||{});
+  Object.keys(ifrRec).forEach(k=>delete ifrRec[k]);
+  Object.assign(ifrRec, st.ifrRec||{});
+  Object.keys(prio).forEach(k=>delete prio[k]);
+  Object.assign(prio, st.prio||{});
+  Object.keys(alias).forEach(k=>delete alias[k]);
+  Object.assign(alias, st.alias||{});
+  if(st.sortBy) sortBy=st.sortBy;
+  Object.keys(hiddenCols).forEach(k=>delete hiddenCols[k]);
+  Object.assign(hiddenCols, st.hiddenCols||{});
+  Object.keys(expanded).forEach(k=>delete expanded[k]);
+  Object.assign(expanded, st.expanded||{});
+  notes = Array.isArray(st.notes)? st.notes : [];
+  setWork();
+  // reflect restored toggles in the UI
+  document.querySelectorAll("#weekend button").forEach(b=>b.classList.toggle("on", !!week[b.dataset.day]));
+  { const se=document.getElementById("sunend"); if(se) se.value = sunUntil? fmtISO(sunUntil) : ""; }
+  document.querySelectorAll("#viewsel button").forEach(b=>b.classList.toggle("on", b.dataset.v===view));
+  document.querySelectorAll("#sortsel button").forEach(b=>b.classList.toggle("on", b.dataset.s===sortBy));
+  document.querySelectorAll("#followsel button").forEach(b=>b.classList.toggle("on", (b.dataset.f==="1")===followMode));
+}
+function migrateOffsets(){
+  // dates saved before offsets existed: derive each one's distance from its plan date
+  // at the CURRENT lever settings, so nothing visibly moves but levers work from now on.
+  const missing=Object.keys(ovD).filter(k=>!(k in ovO));
+  if(!missing.length) return 0;
+  const rows=compute();
+  missing.forEach(k=>{
+    const p=k.split("|"); const stage=p[2];
+    const row=rows.find(x=>x.key===p[0]);
+    const s=row&&row.sheetList&&row.sheetList.find(x=>x.wpid===p[1]);
+    if(!s) return;
+    const base = stage==="ifr"?s.baseIFR : stage==="ifc"?s.baseIFC : s.baseIFF;
+    ovO[k]=bizBetween(base, ovD[k]);
+  });
+  return missing.length;
+}
+function stateLoad(){
+  try{
+    if(SEED_STATE){
+      // Hosted read view: always start from the last snapshot pushed by David,
+      // not from whatever (if anything) this browser has saved locally.
+      applyState(SEED_STATE);
+    }else{
+      const raw=localStorage.getItem(SKEY);
+      if(raw) applyState(JSON.parse(raw));
+    }
+  }catch(e){ storageOK=false; }
+  migrateOffsets();
+}
+let saveTimer=null;
+function stateSave(){
+  if(!storageOK){ stampSaved(null); return; }
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(()=>{
+    try{
+      localStorage.setItem(SKEY, JSON.stringify(snapshot()));
+      stampSaved(new Date());
+    }catch(e){ storageOK=false; stampSaved(null); }
+  },250);
+}
+function stampSaved(d){
+  const el=document.getElementById("nsave"); if(!el) return;
+  const n=notes.length? `${notes.length} note${notes.length>1?'s':''} · ` : "";
+  if(!d){ el.innerHTML=`${n}<span style="color:var(--behind)">not saving — use Backup</span>`; return; }
+  el.textContent=`${n}saved ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+}
+function notesSave(){ stateSave(); }
+// ---------- shared sync ----------
+const CFGKEY="nova102_sync_v1";
+let syncCfg={url:"",who:"",auto:false,lastPullAt:0,remoteAt:0};
+let syncTimer=null;
+function cfgLoad(){ try{const r=localStorage.getItem(CFGKEY); if(r) Object.assign(syncCfg,JSON.parse(r));}catch(e){} }
+function cfgSave(){ try{localStorage.setItem(CFGKEY,JSON.stringify(syncCfg));}catch(e){} }
+function smsg(t,cls){ const e=document.getElementById("syncmsg");
+  if(!e)return; e.className="smsg"+(cls?" "+cls:""); e.textContent=t; }
+function stamp(ms){ if(!ms) return "unknown";
+  const d=new Date(ms); return `${MO[d.getMonth()]} ${d.getDate()} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
+async function syncPull(quiet){
+  if(!syncCfg.url){ smsg("Add a shared endpoint first.","warn"); return; }
+  try{
+    smsg("Pulling\u2026");
+    const res=await fetch(syncCfg.url,{method:"GET",cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const payload=await res.json();
+    if(!payload || !payload.state){ smsg("Endpoint reachable but has no tracker data yet. Push yours to seed it.","warn"); return; }
+    applyState(payload.state);
+    syncCfg.remoteAt=payload.savedAt||0; syncCfg.lastPullAt=Date.now(); cfgSave();
+    render();
+    smsg(`Pulled ${payload.by?"from "+payload.by:""} \u2014 saved ${stamp(payload.savedAt)}.`,"ok");
+  }catch(e){ smsg("Could not pull: "+e.message+". Check the endpoint URL.","bad"); }
+}
+async function syncPush(){
+  if(!syncCfg.url){ smsg("Add a shared endpoint first.","warn"); return; }
+  try{
+    // warn if the shared copy moved since our last pull
+    let remote=null;
+    try{ const r=await fetch(syncCfg.url,{method:"GET",cache:"no-store"});
+         if(r.ok) remote=await r.json(); }catch(e){}
+    if(remote && remote.savedAt && syncCfg.lastPullAt && remote.savedAt>syncCfg.remoteAt){
+      const who=remote.by||"someone else";
+      if(!confirm(`${who} saved changes at ${stamp(remote.savedAt)}, after your last pull.\n\nPushing now overwrites their version. Pull first instead?\n\nOK = overwrite anyway, Cancel = stop.`)) {
+        smsg("Push cancelled. Pull latest, re-check your edits, then push.","warn"); return;
+      }
+    }
+    smsg("Pushing\u2026");
+    const body={by:syncCfg.who||"unnamed", savedAt:Date.now(), state:snapshot()};
+    const res=await fetch(syncCfg.url,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    syncCfg.remoteAt=body.savedAt; syncCfg.lastPullAt=Date.now(); cfgSave();
+    smsg(`Pushed as ${body.by} at ${stamp(body.savedAt)}. Your colleague can Pull latest to see it.`,"ok");
+  }catch(e){ smsg("Could not push: "+e.message,"bad"); }
+}
+function syncAuto(on){
+  syncCfg.auto=on; cfgSave();
+  if(syncTimer){ clearInterval(syncTimer); syncTimer=null; }
+  if(on) syncTimer=setInterval(()=>syncPull(true),60000);
+}
+function downloadBackup(){
+  const blob=new Blob([JSON.stringify(snapshot(),null,2)],{type:"application/json"});
+  const a=document.createElement("a"); const d=new Date();
+  a.href=URL.createObjectURL(blob);
+  a.download=`Nova102_schedule_state_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}.json`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+function restoreBackup(file){
+  const fr=new FileReader();
+  fr.onload=()=>{
+    try{ applyState(JSON.parse(fr.result)); stateSave(); render(); }
+    catch(e){ alert("That file could not be read as a saved schedule state."); }
+  };
+  fr.readAsText(file);
+}
+function clearSaved(){
+  if(!confirm("Clear all saved dates, statuses and notes from this browser? Export a backup first if you need it.")) return;
+  try{ localStorage.removeItem(SKEY); }catch(e){}
+  location.reload();
+}
+function tagOptions(rows){
+  const sel=document.getElementById("ntag");
+  const cur=sel.value;
+  let html=`<option value="">General</option>`;
+  visible(rows).forEach(r=>{
+    html+=`<option value="set:${r.key}">${r.label}</option>`;
+    if(r.detail) r.sheetList.forEach(s=>{
+      const n=s.no===null?"TBC":String(s.no).padStart(2,"0");
+      html+=`<option value="wp:${r.key}|${s.wpid}">&nbsp;&nbsp;Sheet ${n} · ${s.zone}</option>`;
+    });
+  });
+  sel.innerHTML=html;
+  if(cur) sel.value=cur;
+}
+function tagLabel(tag,rows){
+  if(!tag) return {txt:"General", gen:true};
+  if(tag.startsWith("set:")){
+    const r=rows.find(x=>x.key===tag.slice(4));
+    return {txt:r?r.label:tag.slice(4), gen:false};
+  }
+  const [k,w]=tag.slice(3).split("|");
+  const r=rows.find(x=>x.key===k);
+  const s=r&&r.sheetList? r.sheetList.find(x=>x.wpid===w):null;
+  return {txt: s? `Sheet ${s.no===null?"TBC":String(s.no).padStart(2,"0")}` : w, gen:false};
+}
+function renderNotes(rows){
+  tagOptions(rows);
+  const list=document.getElementById("nlist");
+  if(!notes.length){
+    list.innerHTML=`<div class="nempty">No updates logged yet. Notes stay attached to a sheet, a set, or the project.<br><span style="font-size:12px">Dates, statuses, need dates, lever settings and notes all save in this browser automatically. Use <b>Backup</b> for a portable copy you can restore or hand to someone else.</span></div>`;
+    return;
+  }
+  list.innerHTML=[...notes].sort((a,b)=>b.ts-a.ts).map(n=>{
+    const t=tagLabel(n.tag,rows);
+    const d=new Date(n.ts);
+    const when=`${MO[d.getMonth()]} ${String(d.getDate()).padStart(2,"0")} ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+    return `<div class="nrow">
+      <div class="nmeta">${when}</div>
+      <div class="nbody"><span class="ntagx ${t.gen?'gen':''}">${t.txt}</span>${n.text.replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</div>
+      <button class="ndel" data-id="${n.id}">remove</button></div>`;
+  }).join("");
+  list.querySelectorAll(".ndel").forEach(b=>{
+    b.addEventListener("click",()=>{
+      notes=notes.filter(n=>n.id!==b.dataset.id); notesSave(); render();
+    });
+  });
+}
+function addNote(){
+  const t=document.getElementById("ntext");
+  const txt=t.value.trim(); if(!txt) return;
+  notes.push({id:String(Date.now())+Math.random().toString(36).slice(2,6),
+    ts:Date.now(), tag:document.getElementById("ntag").value, text:txt});
+  t.value=""; notesSave(); render();
+}
+function downloadNotes(){
+  const rows=compute();
+  const out=["Logged,Tag,Scope,Note"];
+  [...notes].sort((a,b)=>a.ts-b.ts).forEach(n=>{
+    const t=tagLabel(n.tag,rows);
+    const d=new Date(n.ts);
+    out.push([d.toISOString().slice(0,16).replace("T"," "),
+      n.tag||"general", t.txt, n.text].map(q).join(","));
+  });
+  const blob=new Blob([out.join("\n")],{type:"text/csv;charset=utf-8;"});
+  const a=document.createElement("a");
+  const dd=new Date();
+  a.href=URL.createObjectURL(blob);
+  a.download=`Nova102_notes_${dd.getFullYear()}${String(dd.getMonth()+1).padStart(2,"0")}${String(dd.getDate()).padStart(2,"0")}.csv`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+}
+
+// ---------- events ----------
+document.querySelectorAll(".lever input").forEach(inp=>{
+  inp.addEventListener("input",e=>{
+    const k=e.target.closest(".lever").dataset.lever;
+    L[k]=parseInt(e.target.value,10); render();
+  });
+});
+document.querySelectorAll("#filter button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#filter button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); filter=b.dataset.ph; render();
+  });
+});
+const PRESETS={
+  base:{...DEFAULTS},
+  fast:{ifr:2,rev:2,red:0,fin:0,lap:1,fab:3,slip:0},
+  churn:{ifr:3,rev:4,red:2,fin:1,lap:0,fab:7,slip:0},
+  slip5:{...DEFAULTS, slip:5},
+};
+document.querySelectorAll(".presets button").forEach(b=>{
+  b.addEventListener("click",()=>{ L={...PRESETS[b.dataset.preset]}; render(); });
+});
+document.querySelectorAll("#weekend button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    const day=b.dataset.day; week[day]=!week[day];
+    b.classList.toggle("on", week[day]);
+    setWork(); render();
+  });
+});
+document.getElementById("csv").addEventListener("click", downloadCSV);
+document.getElementById("colbtn").addEventListener("click",e=>{
+  e.stopPropagation();
+  document.getElementById("colmenu").classList.toggle("open");
+});
+document.addEventListener("click",e=>{
+  const m=document.getElementById("colmenu");
+  if(m && !m.contains(e.target) && e.target.id!=="colbtn") m.classList.remove("open");
+});
+document.getElementById("sunend").addEventListener("change",e=>{
+  sunUntil = e.target.value? new Date(e.target.value+"T00:00:00") : null;
+  render();
+});
+document.querySelectorAll("#followsel button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#followsel button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); followMode=b.dataset.f==="1"; render();
+  });
+});
+document.querySelectorAll("#sortsel button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#sortsel button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); sortBy=b.dataset.s; render();
+  });
+});
+document.querySelectorAll("#viewsel button").forEach(b=>{
+  b.addEventListener("click",()=>{
+    document.querySelectorAll("#viewsel button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on"); view=b.dataset.v; render();
+  });
+});
+document.getElementById("q").addEventListener("input",e=>{
+  query=e.target.value;
+  if(query && view!=="sheets"){
+    view="sheets";
+    document.querySelectorAll("#viewsel button").forEach(x=>x.classList.toggle("on",x.dataset.v==="sheets"));
+  }
+  render();
+});
+document.getElementById("nadd").addEventListener("click", addNote);
+document.getElementById("ntext").addEventListener("keydown",e=>{ if(e.key==="Enter") addNote(); });
+document.getElementById("ncsv").addEventListener("click", downloadNotes);
+
+document.getElementById("bkp").addEventListener("click", downloadBackup);
+document.getElementById("rst").addEventListener("click",()=>document.getElementById("rstf").click());
+document.getElementById("rstf").addEventListener("change",e=>{
+  if(e.target.files&&e.target.files[0]) restoreBackup(e.target.files[0]);
+  e.target.value="";
+});
+document.getElementById("clr").addEventListener("click", clearSaved);
+document.getElementById("syncbtn").addEventListener("click",()=>{
+  document.getElementById("syncpanel").classList.toggle("open");
+});
+document.getElementById("syncurl").addEventListener("change",e=>{
+  syncCfg.url=e.target.value.trim(); cfgSave();
+  smsg(syncCfg.url?"Endpoint saved. Use Pull latest to load the shared copy, or Push mine to seed it.":"Not connected.",
+       syncCfg.url?"ok":"");
+});
+document.getElementById("syncwho").addEventListener("change",e=>{
+  syncCfg.who=e.target.value.trim(); cfgSave();
+});
+document.getElementById("pullbtn").addEventListener("click",()=>syncPull(false));
+document.getElementById("pushbtn").addEventListener("click",syncPush);
+document.getElementById("syncauto").addEventListener("change",e=>syncAuto(e.target.checked));
+
+cfgLoad();
+{ const u=document.getElementById("syncurl"), n=document.getElementById("syncwho"),
+      a=document.getElementById("syncauto");
+  if(u) u.value=syncCfg.url||""; if(n) n.value=syncCfg.who||"";
+  if(a) a.checked=!!syncCfg.auto;
+  if(syncCfg.url){ document.getElementById("syncpanel").classList.add("open");
+    smsg(`Connected. Last sync ${syncCfg.lastPullAt?stamp(syncCfg.lastPullAt):"never"}.`); }
+  if(syncCfg.auto) syncAuto(true);
+}
+
+stateLoad();
+
+setWork();
+render();
+
+// ---------- snapshot banner ----------
+(function(){
+  const el=document.getElementById("snapbarText");
+  if(!el) return;
+  if(!SEED_STATE){
+    el.innerHTML="No snapshot has been pushed yet — showing the blank 42-sheet plan.";
+    return;
+  }
+  const d=new Date(SEED_PUSHED_AT);
+  const stamp=`${MO[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()} at ${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+  el.innerHTML=`Snapshot pushed by <b>${SEED_PUSHED_BY}</b> — ${stamp}. Reopen this page any time for the latest; edits made here stay in your browser only and won’t be seen by others.`;
+})();
+</script>
+</body>
+</html>
+
