@@ -470,24 +470,6 @@
     </div>
 
     <div class="panel">
-      <div class="head">
-        <h3>Live timeline</h3>
-        <div class="leg">
-          <span class="sw"><span class="box" style="background:linear-gradient(90deg,#4C7EF0,#6E97F4)"></span>IFR&rarr;IFC</span>
-          <span class="sw"><span class="box" style="background:#CBD6E6"></span>IFC&rarr;IFF</span>
-          <span class="sw"><span class="dot" style="background:var(--ink)"></span>IFC</span>
-          <span class="sw"><span class="box" style="width:2px;height:13px;background:var(--live)"></span>sheet IFC</span>
-          <span class="sw"><span class="box" style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--tight)"></span>need</span>
-          <span class="sw"><span class="box" style="width:2px;height:13px;background:#B0BAC6"></span>baseline IFC</span>
-        </div>
-      </div>
-      <div class="tl">
-        <div class="axis" id="axis"></div>
-        <div id="lanes"></div>
-      </div>
-    </div>
-
-    <div class="panel">
       <div class="head"><h3>Dates &amp; cushion</h3>
         <div class="leg">
           <span>Enter a construction-need date to see cushion</span>
@@ -531,6 +513,24 @@
           <b>Export CSV</b> writes one row per work package — WPID, sheet no., plan vs delivery date, status, slip, fab release, cushion, and the scenario settings used — ready to paste back into the FORMA_READY workbook.
           <b>Assumptions:</b> weekends excluded unless toggled, holidays not modeled; IFC&rarr;IFF lag is a placeholder until real fab + ship durations are set.
         </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="head">
+        <h3>Live timeline</h3>
+        <div class="leg">
+          <span class="sw"><span class="box" style="background:linear-gradient(90deg,#4C7EF0,#6E97F4)"></span>IFR&rarr;IFC</span>
+          <span class="sw"><span class="box" style="background:#CBD6E6"></span>IFC&rarr;IFF</span>
+          <span class="sw"><span class="dot" style="background:var(--ink)"></span>IFC</span>
+          <span class="sw"><span class="box" style="width:2px;height:13px;background:var(--live)"></span>sheet IFC</span>
+          <span class="sw"><span class="box" style="width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid var(--tight)"></span>need</span>
+          <span class="sw"><span class="box" style="width:2px;height:13px;background:#B0BAC6"></span>baseline IFC</span>
+        </div>
+      </div>
+      <div class="tl">
+        <div class="axis" id="axis"></div>
+        <div id="lanes"></div>
       </div>
     </div>
     <div class="panel">
