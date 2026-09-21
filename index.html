@@ -483,6 +483,7 @@
           <button data-s="ifc">IFC date</button>
         </div>
         <select id="viewsel2" class="navsel" title="Saved views"></select>
+        <button id="clearView" class="exp alt" title="Clear every filter and go back to the default view">Clear view</button>
         <button id="saveView" class="exp alt" title="Save the current filters as a named view">Save view</button>
         <button id="copyLink" class="exp alt" title="Copy a link that reopens this exact view">Copy link</button>
         <select id="locsel" class="navsel" title="Show one location"></select>
@@ -1855,10 +1856,25 @@ function syncWinUI(){
   const oo=document.getElementById("openonly"); if(oo) oo.checked = openOnly;
   document.querySelectorAll("#arrfilter button").forEach(b=>b.classList.toggle("on", b.dataset.arr===arrFilter));
 }
+function resetView(){
+  arrFilter="ALL"; winStage="any"; winFrom=""; winTo=""; openOnly=false;
+  locFilter="ALL"; wtFilter="ALL"; dueFilter="ALL"; query=""; filter="UG";
+  view="sets"; sortBy=SEED_STATE&&SEED_STATE.sortBy? SEED_STATE.sortBy : "sheet";
+  const qi=document.getElementById("q"); if(qi) qi.value="";
+  const ls=document.getElementById("locsel"); if(ls) ls.value="ALL";
+  const wsel=document.getElementById("wtsel"); if(wsel) wsel.value="ALL";
+  document.querySelectorAll("#filter button").forEach(b=>b.classList.toggle("on", b.dataset.ph===filter));
+  document.querySelectorAll("#viewsel button").forEach(b=>b.classList.toggle("on", b.dataset.v===view));
+  document.querySelectorAll("#sortsel button").forEach(b=>b.classList.toggle("on", b.dataset.s===sortBy));
+  document.querySelectorAll("#duefilter button").forEach(b=>b.classList.toggle("on", b.dataset.due===dueFilter));
+  history.replaceState(null,"",location.pathname+location.search);
+  syncWinUI(); fillViews(); render();
+}
 function fillViews(){
   const el=document.getElementById("viewsel2"); if(!el) return;
   const names=Object.keys(BUILTIN_VIEWS).concat(Object.keys(views));
-  const html=['<option value="">Saved views…</option>']
+  const html=['<option value="">Saved views…</option>',
+      '<option value="__RESET__">\u21ba  Clear view \u2014 back to default</option>']
     .concat(names.map(n=>`<option value="${n}">${n}</option>`)).join("");
   if(el.dataset.sig!==html){ el.dataset.sig=html; el.innerHTML=html; }
   el.value="";
@@ -1895,8 +1911,11 @@ document.querySelectorAll("#arrfilter button").forEach(b=>b.addEventListener("cl
   arrFilter=b.dataset.arr; syncWinUI(); render(); }));
 document.getElementById("viewsel2").addEventListener("change",e=>{
   const n=e.target.value; if(!n) return;
-  applyView(BUILTIN_VIEWS[n]||views[n]); e.target.value="";
+  e.target.value="";
+  if(n==="__RESET__"){ resetView(); return; }
+  applyView(BUILTIN_VIEWS[n]||views[n]);
 });
+document.getElementById("clearView").addEventListener("click",()=>resetView());
 document.getElementById("saveView").addEventListener("click",()=>{
   const n=prompt("Name this view"); if(!n) return;
   views[n]=currentView(); fillViews(); render();
