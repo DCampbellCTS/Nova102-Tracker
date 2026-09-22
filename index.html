@@ -391,6 +391,9 @@
   .rfi.answered{background:#E1F3EB;color:#12603F;border-color:#A9D8BA}
   .rfi.closed{background:#EEF1F5;color:#4A5568;border-color:#CBD5E0}
   .rfi.unk{background:#F4F6F8;color:var(--muted);border-color:var(--line)}
+  .rfi.warn{background:#FDECC8;color:#8A5A00;border-color:#E8C37A}
+  .rfi.sub{border-style:dashed}
+  .rfi.resolved{background:transparent;color:var(--faint);border-color:var(--line2)}
   .wtag{display:inline-block;font-size:9.5px;font-weight:650;color:#fff;background:#6B7C8F;border-radius:4px;padding:0 5px;margin-right:5px;vertical-align:1px}
   /* collapsible sections + layout options */
   .pcol{font-family:var(--ui);font-size:11.5px;color:var(--muted);background:#fff;border:1px solid var(--line);border-radius:6px;
@@ -1400,15 +1403,15 @@ function cushCell(r){
 const expanded = {};
 const THEAD_SETS = `<tr><th>Ph</th><th>Location</th><th class="num">Progress</th>
   <th class="num">Pri</th><th class="num">Sign-off</th><th class="num">IFR</th>
-  <th class="num">IFC</th><th class="num">IFF</th><th class="num">Revision</th><th class="num">RFIs</th><th class="num">Need</th>
+  <th class="num">IFC</th><th class="num">IFF</th><th class="num">Revision</th><th class="num">RFIs &amp; submittals</th><th class="num">Need</th>
   <th class="num">Cushion</th></tr>`;
 const THEAD_SHEETS = `<tr><th class="num">Sheet</th><th>Work package</th>
   <th class="num">Pri</th><th class="num">IFR</th><th class="num">IFC</th>
-  <th class="num">IFF</th><th class="num">Revision</th><th class="num">RFIs</th><th class="num">Status</th><th>Construction need</th>
+  <th class="num">IFF</th><th class="num">Revision</th><th class="num">RFIs &amp; submittals</th><th class="num">Status</th><th>Construction need</th>
   <th class="num">Cushion</th><th class="num">vs plan</th></tr>`;
 const SUBHEAD = `<tr class="sub subhead"><td></td><td>Work package</td>
   <td class="num">Pri</td><td class="num">IFR</td><td class="num">IFC</td>
-  <td class="num">IFF</td><td class="num">Revision</td><td class="num">RFIs</td><td class="num">Status</td><td>Construction need</td>
+  <td class="num">IFF</td><td class="num">Revision</td><td class="num">RFIs &amp; submittals</td><td class="num">Status</td><td>Construction need</td>
   <td class="num">Cushion</td><td class="num">vs plan</td></tr>`;
 // notes tagged to one specific work package, e.g. "wp:C1-UG-C1|NOVA102.C1.UG.N1.UGC"
 function notesFor(k){ return notes.filter(n=>n.tag==="wp:"+k); }
@@ -1440,33 +1443,59 @@ function haveBox(setKey,wpid,stage,on){
 }
 // RFIs and ACC issues read out of the notes so they get their own column (David, 2026-09-22).
 // The newest note that states a status wins, so a later ANSWERED/CLOSED supersedes an older OPEN.
-// RFI status is project-wide: the newest note (from anywhere) that states a status wins, while a
-// row only lists the RFIs mentioned in its own notes.
+// RFIs, ACC issues and submittals read out of the notes (David, 2026-09-22). Status is project-wide:
+// the newest note (from anywhere) that states a status wins. A row lists every item mentioned in the
+// notes on that sheet or on its set; a location row rolls up every item across its sheets.
 let RFI_CACHE={sig:"", byNote:{}, glob:{}};
+const SUB_STATUS=[
+  [/revise\s+and\s+resubmit|rejected|resubmit/i,"Revise & resubmit","open"],
+  [/overdue|still\s+not\s+closed|not\s+closed|pending|outstanding|\bopen\b/i,"Open","open"],
+  [/make\s+corrections\s+noted|corrections\s+noted/i,"Corrections noted","warn"],
+  [/no\s+exceptions\s+taken|approved|returned|closed/i,"Approved","closed"]];
+function subStatus(seg){
+  let best=null;
+  SUB_STATUS.forEach(([re,label,cls])=>{ const m=re.exec(seg); if(m && (!best || m.index<best.i)) best={i:m.index,label,cls}; });
+  return best;
+}
 function rfiIndex(){
   const sig=notes.length+":"+notes.reduce((m,n)=>Math.max(m,tsNum(n.ts)),0);
   if(RFI_CACHE.sig===sig) return RFI_CACHE;
   const byNote={}, glob={};
+  const put=(n,id,rec)=>{
+    const l=(byNote[n.id]||(byNote[n.id]=[])); if(!l.includes(id)) l.push(id);
+    const prev=glob[id];
+    if(!prev){ glob[id]=rec; return; }
+    if(rec.status){ prev.status=rec.status; prev.cls=rec.cls; prev.ts=rec.ts; prev.snip=rec.snip; }
+    if(rec.strong && !prev.strong){ prev.label=rec.label; prev.strong=true; }
+  };
   [...notes].sort((a,b)=>tsNum(a.ts)-tsNum(b.ts)).forEach(n=>{
-    const t=String(n.text||"");
-    const re=/\b(?:(Procore|BES)\s+)?RFI\s*#?\s*(\d+(?:\.\d+)?)|\bACC\s+Issue\s*#\s*(\d+)/gi; let m;
+    const t=String(n.text||""), ts=tsNum(n.ts); let m;
+    const re=/\b(?:(Procore|BES)\s+)?RFI\s*#?\s*(\d+(?:\.\d+)?)|\bACC\s+Issue\s*#\s*(\d+)/gi;
     while((m=re.exec(t))){
       const acc=!!m[3];
       const sys=acc? "ACC" : (m[1]? m[1] : (/\(BES\b/i.test(t.slice(m.index,m.index+40))? "BES" : ""));
       const num=acc? m[3] : m[2];
-      const label=acc? `ACC Issue #${num}` : `${sys?sys+" ":""}RFI ${num}`;
-      const id=acc? "ACC"+num : "RFI"+num+"|"+(sys==="Procore"?"P":"B");
       let rest=t.slice(re.lastIndex); const cut=rest.search(/\.\s|;\s/); if(cut>=0) rest=rest.slice(0,cut);
       const sm=/\b(OPEN|ANSWERED|CLOSED|RESOLVED|PENDING)\b/i.exec(rest.slice(0,240));
-      const status=sm? sm[1].toUpperCase().replace("RESOLVED","CLOSED") : null;
-      const snip=t.slice(Math.max(0,m.index-10), m.index+220);
-      (byNote[n.id]||(byNote[n.id]=[])).push(id);
-      const prev=glob[id];
-      if(!prev) glob[id]={label, status, ts:tsNum(n.ts), snip};
-      else{
-        if(status){ prev.status=status; prev.ts=tsNum(n.ts); prev.snip=snip; }
-        if(sys && !/^(BES|Procore|ACC) /.test(prev.label)) prev.label=label;
-      }
+      const st=sm? sm[1].toUpperCase().replace("RESOLVED","CLOSED") : null;
+      put(n, acc? "ACC"+num : "RFI"+num+"|"+(sys==="Procore"?"P":"B"), {
+        kind:acc?"issue":"rfi", label:acc? `ACC Issue #${num}` : `${sys?sys+" ":""}RFI ${num}`, strong:!!sys,
+        status:st? st.charAt(0)+st.slice(1).toLowerCase() : null,
+        cls:!st?"unk":((st==="OPEN"||st==="PENDING")?"open":(st==="ANSWERED"?"answered":"closed")),
+        ts, snip:t.slice(Math.max(0,m.index-10), m.index+220)});
+    }
+    if(/submittal/i.test(t)){
+      const sr=/(?<![\d.])(\d{2} \d{2} \d{2}(?:[.\-]\d+)*)(?!\d)/g;
+      const all=[...t.matchAll(sr)];
+      all.forEach((mm,i)=>{
+        const end=i+1<all.length? all[i+1].index : t.length;
+        let seg=t.slice(mm.index+mm[0].length, end); const cut=seg.search(/\.\s/); if(cut>=0) seg=seg.slice(0,cut);
+        // "... 26 05 43-5 (...) and 26 05 43-1 (...) are both still Revise and Resubmit" -> look ahead to the sentence end
+        if(!subStatus(seg)){ let tail=t.slice(mm.index+mm[0].length); const c2=tail.search(/\.\s/); if(c2>=0) tail=tail.slice(0,c2); seg=tail; }
+        const ss=subStatus(seg);
+        put(n, "SUB"+mm[1], {kind:"sub", label:`Submittal ${mm[1]}`, strong:true,
+          status:ss?ss.label:null, cls:ss?ss.cls:"unk", ts, snip:t.slice(Math.max(0,mm.index-12), mm.index+220)});
+      });
     }
   });
   RFI_CACHE={sig, byNote, glob}; return RFI_CACHE;
@@ -1474,18 +1503,20 @@ function rfiIndex(){
 function rfiScan(tags){
   const idx=rfiIndex(), want=new Set(tags), ids=new Set();
   notes.forEach(n=>{ if(want.has(n.tag)) (idx.byNote[n.id]||[]).forEach(i=>ids.add(i)); });
-  return [...ids].map(i=>idx.glob[i]).sort((a,b)=>a.label.localeCompare(b.label,undefined,{numeric:true}));
+  const ord={open:0,warn:1,unk:2,answered:3,closed:4};
+  return [...ids].map(i=>idx.glob[i]).sort((a,b)=>(ord[a.cls]-ord[b.cls])||a.label.localeCompare(b.label,undefined,{numeric:true}));
 }
+// tags a sheet row inherits: its own notes plus its set's notes
+function sheetTags(setKey,wpid){ return ["wp:"+setKey+"|"+wpid, "set:"+setKey]; }
 function rfiCell(tags){
   const list=rfiScan(tags);
   if(!list.length) return `<span class="revb none">\u2014</span>`;
   const qa=t=>escN(t).replace(/"/g,"&quot;");
-  return `<span class="rfis">${list.map(x=>{
-    const st=x.status||"";
-    const cls=!st?"unk":((st==="OPEN"||st==="PENDING")?"open":(st==="ANSWERED"?"answered":"closed"));
-    const d=new Date(x.ts);
-    return `<span class="rfi ${cls}" title="${qa(x.snip)}\u2026 (note of ${MO[d.getMonth()]} ${d.getDate()})">${escN(x.label)}${st?" \u00b7 "+st.charAt(0)+st.slice(1).toLowerCase():""}</span>`;
-  }).join("")}</span>`;
+  const chip=x=>{ const d=new Date(x.ts);
+    return `<span class="rfi ${x.cls} ${x.kind}" title="${qa(x.snip)}\u2026 (note of ${MO[d.getMonth()]} ${d.getDate()})">${escN(x.label)}${x.status?" \u00b7 "+escN(x.status):""}</span>`; };
+  const live=list.filter(x=>x.cls!=="closed"&&x.cls!=="answered"), done=list.filter(x=>x.cls==="closed"||x.cls==="answered");
+  const doneChip=done.length? `<span class="rfi resolved" title="${qa("Resolved: "+done.map(x=>x.label+(x.status?" ("+x.status+")":"")).join(", "))}">+${done.length} resolved</span>` : "";
+  return `<span class="rfis">${live.map(chip).join("")}${doneChip}</span>`;
 }
 const REV_STAGES = ["iff","ifc","ifr"];
 function revOf(setKey,wpid){
@@ -1551,7 +1582,7 @@ function sheetRowCells(r,s){
     <td class="num">${mCell(r.key,s.wpid,'ifc',s.ifc,s.oIFC,s.ifcHave)}${haveBox(r.key,s.wpid,'ifc',s.ifcHave)}${s.reIFR?`<span class="reifr" title="Revised after IFC \u2014 a newer IFR is in hand, so a fresh IFC is still to come">re-IFR</span>`:""}${warn}</td>
     <td class="num">${mCell(r.key,s.wpid,'iff',s.iff,s.oIFF,s.gotIFF)}${haveBox(r.key,s.wpid,'iff',s.gotIFF)}</td>
     <td class="num">${revCell(r.key,s.wpid)}</td>
-    <td class="num">${rfiCell(["wp:"+r.key+"|"+s.wpid])}</td>
+    <td class="num">${rfiCell(sheetTags(r.key,s.wpid))}</td>
     <td class="num">${statusSeg(r.key,s.wpid,s.done,s.held)}</td>
     <td>${needCell(r.key,s.wpid,s)}</td>
     <td class="num">${cushCellHold(s)}</td>
@@ -1844,7 +1875,7 @@ const COLDEFS = [
   {k:"ifc",     l:"IFC"},
   {k:"iff",     l:"IFF"},
   {k:"rev",     l:"Revision"},
-  {k:"rfi",     l:"RFIs"},
+  {k:"rfi",     l:"RFIs & submittals"},
   {k:"status",  l:"Status"},
   {k:"need",    l:"Construction need"},
   {k:"cushion", l:"Cushion"},
