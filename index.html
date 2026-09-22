@@ -393,6 +393,8 @@
   .rfi.unk{background:#F4F6F8;color:var(--muted);border-color:var(--line)}
   .rfi.warn{background:#FDECC8;color:#8A5A00;border-color:#E8C37A}
   .rfi.sub{border-style:dashed}
+  .odue{display:inline-block;margin-left:5px;font-family:var(--ui);font-size:9.5px;font-weight:650;color:#9B2C2C;background:#FBE4E4;
+    border:1px solid #F0B4B4;border-radius:4px;padding:0 4px;vertical-align:1px;cursor:help}
   .rfi.resolved{background:transparent;color:var(--faint);border-color:var(--line2)}
   .wtag{display:inline-block;font-size:9.5px;font-weight:650;color:#fff;background:#6B7C8F;border-radius:4px;padding:0 5px;margin-right:5px;vertical-align:1px}
   /* collapsible sections + layout options */
@@ -632,9 +634,9 @@
       </div>
       <div style="padding:12px 16px 16px">
         <div class="foot">
-          <b>Reading it:</b> The blue delta beside a date is the shift from the current baseline as you move levers. Cushion is business days between IFC and the need date you enter &mdash; <span style="color:var(--ahead)">ahead</span>, <span style="color:var(--tight)">&le;3 days</span>, <span style="color:var(--behind)">behind</span>.
+          <b>Reading it:</b> The blue delta beside a date is the shift from the current baseline as you move levers. Cushion is business days between the IFR (or the IFC, once it is in hand) and the need date &mdash; <span style="color:var(--ahead)">ahead</span>, <span style="color:var(--tight)">&le;3 days</span>, <span style="color:var(--behind)">behind</span>.
           <b>Per-sheet dates:</b> Every sheet carries its own <b>IFR</b>, <b>IFC</b> and <b>IFF</b>. Edits cascade downstream &mdash; move a sheet's IFR and its IFC and IFF follow; edit IFC and only IFF follows; edit IFF and it holds. Anything you haven't touched keeps tracking the levers. <span style="color:var(--live)">reset</span> returns all three to plan. A set is <b>gated by its latest sheet</b> at each milestone.
-          <b>Construction need:</b> Set it once on a sheet set and every sheet inherits it, or give a sheet its own date (shown amber) when it differs. Cushion is business days from that sheet's IFC to its need date.
+          <b>Construction need:</b> Set it once on a sheet set and every sheet inherits it, or give a sheet its own date (shown amber) when it differs. Cushion is business days from that sheet's IFR (IFC once in hand) to its need date.
           <b>In hand:</b> Tick <span style="color:var(--ahead)">in hand</span> beside an IFR, IFC or IFF date only when we actually hold that drawing. A ticked date is recorded as an actual and pins its date — levers and scenarios no longer move it, so committed deliveries stay put while the rest of the plan flexes. The in-hand count per set is the same signal the Revit MCP feed writes back as % complete.
           <b>Export CSV</b> writes one row per work package — WPID, sheet no., plan vs delivery date, status, slip, fab release, cushion, and the scenario settings used — ready to paste back into the FORMA_READY workbook.
           <b>Assumptions:</b> weekends excluded, holidays not modeled; IFC&rarr;IFF lag is a placeholder until real fab + ship durations are set.
@@ -929,7 +931,10 @@ const PENDING = [
   {key:"C4-AG", label:"COLO4 / MY4 / EY4 — verticals", anchor:"C4-AG", ph:"AG", wp:156},
 ];
 function wpid(prefix,zone,wtype){ return `NOVA102.${prefix}.UG.${zone}.${wtype||"UGC"}`; }
-const TODAY = new Date("2026-09-01T00:00:00");
+// Real today (was fixed at 2026-09-01). RUN0 = the first working day from today: a forecast for a
+// drawing we don't hold can never sit in the past, it rolls forward to here and is flagged overdue.
+const TODAY = (()=>{ const d=new Date(); d.setHours(0,0,0,0); return d; })();
+const RUN0  = (()=>{ const d=new Date(TODAY); while(d.getDay()===0||d.getDay()===6) d.setDate(d.getDate()+1); return d; })();
 
 // ---------- state ----------
 const DEFAULTS = {ifr:3, rev:3, red:0, fin:0, lap:0, fab:5, slip:0};
@@ -1028,11 +1033,24 @@ function compute(){
         if(followMode && (kk in ovO)) return addBiz(baseline, ovO[kk]);
         return ovD[kk];
       };
-      const ifr=res("ifr",planIFR)||planIFR;
+      let ifr=res("ifr",planIFR)||planIFR;
       const ifcB=addBiz(ifr,remain);
-      const ifc=res("ifc",ifcB)||ifcB;
+      let ifc=res("ifc",ifcB)||ifcB;
       const iffB=addBiz(ifc,L.fab);
-      const iff=res("iff",iffB)||iffB;
+      let iff=res("iff",iffB)||iffB;
+      // Overdue roll-forward (David, 2026-09-22): a stage we don't hold whose forecast is already
+      // past moves to the next working day and is flagged, so it shows up in date windows as due now.
+      const planWas={ifr, ifc, iff};
+      let lateIFR=false, lateIFC=false;
+      // only real deliverables roll: a numbered sheet, or one the model has issued / we hold.
+      // Placeholder rows with no sheet scheme yet (SEC, DB, most GRD/TEL/TRP) keep their plan date.
+      const realSheet = (n!==null) || !!revM[k] || gotIFR0 || done0 || gotIFF0;
+      // held sheets roll too: a hold parks cushion, but a drawing BES owes us is still due now
+      if(realSheet){
+        if(!gotIFR0 && !done0 && !gotIFF0 && ifr<RUN0){ ifr=new Date(RUN0); lateIFR=true; }
+        if(!done0 && !gotIFF0 && ifc<RUN0){ ifc=new Date(Math.max(RUN0, ifr)); lateIFC=true; }
+        if(lateIFC && !gotIFF0 && iff<ifc) iff=new Date(ifc);
+      }
       const need=needS[k]||gNeed||null;
       const done=done0||gotIFF0;   // IFC in hand, or already released for fabrication
       const held=!!hold[k];
@@ -1045,7 +1063,10 @@ function compute(){
         anyOv:((k+"|ifr" in ovD)||(k+"|ifc" in ovD)||(k+"|iff" in ovD)),
         ownNeed:!!needS[k], need, done,
         slipBD:held?0:bizBetween(planIFC,ifc),
-        cush: (need && !held)? bizBetween(ifc,need) : null,
+        lateIFR, lateIFC, wasIFR:planWas.ifr, wasIFC:planWas.ifc,
+        // Need dates are "IFR must be out by" dates (Anthony, 09-18: IFR is enough to fabricate),
+        // so cushion runs from the IFR, or from the IFC once that is in hand.
+        cush: (need && !held)? bizBetween(done0? ifc : ifr, need) : null,
         ifcHave:done0, gotIFF:gotIFF0,
         reIFR: (done0 && gotIFR0 && ifr>ifc),   // revised after IFC: a newer IFR is in hand, fresh IFC to come
         seqBad: (ifc<ifr && !done0) || (iff<ifc && !gotIFF0)};   // an IFC in hand is never out of sequence with a forecast IFR
@@ -1578,8 +1599,8 @@ function needCell(setKey,wpid,s){
 function sheetRowCells(r,s){
   const warn = s.seqBad? `<span class="warn" title="Out of sequence \u2014 IFC must follow IFR, IFF must follow IFC">!</span>` : "";
   return `<td class="num">${prioCell(r.key,s.wpid,s.prio)}</td>
-    <td class="num">${mCell(r.key,s.wpid,'ifr',s.ifr,s.oIFR,s.gotIFR)}${haveBox(r.key,s.wpid,'ifr',s.gotIFR)}</td>
-    <td class="num">${mCell(r.key,s.wpid,'ifc',s.ifc,s.oIFC,s.ifcHave)}${haveBox(r.key,s.wpid,'ifc',s.ifcHave)}${s.reIFR?`<span class="reifr" title="Revised after IFC \u2014 a newer IFR is in hand, so a fresh IFC is still to come">re-IFR</span>`:""}${warn}</td>
+    <td class="num">${mCell(r.key,s.wpid,'ifr',s.ifr,s.oIFR,s.gotIFR)}${haveBox(r.key,s.wpid,'ifr',s.gotIFR)}${s.lateIFR?`<span class="odue" title="Forecast was ${fmt(s.wasIFR)} and we don't hold the IFR, so it is overdue and shown as due now">overdue</span>`:""}</td>
+    <td class="num">${mCell(r.key,s.wpid,'ifc',s.ifc,s.oIFC,s.ifcHave)}${haveBox(r.key,s.wpid,'ifc',s.ifcHave)}${s.lateIFC?`<span class="odue" title="Forecast was ${fmt(s.wasIFC)} and we don't hold the IFC, so it is overdue and shown as due now">overdue</span>`:""}${s.reIFR?`<span class="reifr" title="Revised after IFC \u2014 a newer IFR is in hand, so a fresh IFC is still to come">re-IFR</span>`:""}${warn}</td>
     <td class="num">${mCell(r.key,s.wpid,'iff',s.iff,s.oIFF,s.gotIFF)}${haveBox(r.key,s.wpid,'iff',s.gotIFF)}</td>
     <td class="num">${revCell(r.key,s.wpid)}</td>
     <td class="num">${rfiCell(sheetTags(r.key,s.wpid))}</td>
@@ -2019,7 +2040,8 @@ const BUILTIN_VIEWS = {
   "Expected this week"     : {arr:"ALL", stage:"any", from:"TODAY", to:"FRI",   loc:"ALL", wt:"ALL", open:true},
   "Arrived this week"      : {arr:"D7",  stage:"any", from:"", to:"", loc:"ALL", wt:"ALL", open:false},
   "Past their need date"   : {arr:"ALL", stage:"any", from:"", to:"", loc:"ALL", wt:"ALL", due:"ALL", behind:true},
-  "IFC in the next 30 days": {arr:"ALL", stage:"ifc", from:"TODAY", to:"TODAY+30", loc:"ALL", wt:"ALL"},
+  "IFC in the next 30 days": {arr:"ALL", stage:"ifc", from:"TODAY", to:"TODAY+30", loc:"ALL", wt:"ALL", open:true},
+  "IFR needed in the next 30 days": {arr:"ALL", stage:"ifr", from:"TODAY", to:"TODAY+30", loc:"ALL", wt:"ALL", open:true},
   "UG conduit only"        : {arr:"ALL", stage:"any", from:"", to:"", loc:"ALL", wt:"UG conduit"},
 };
 function isoAdd(days){ const d=new Date(); d.setHours(0,0,0,0);
