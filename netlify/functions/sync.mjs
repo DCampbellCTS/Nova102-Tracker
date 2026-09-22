@@ -22,10 +22,15 @@ import { getStore } from "@netlify/blobs";
 
 const STORE_NAME = "nova102-tracker";
 const KEY = "shared-state";
+// Shared notes live in their own document so every viewer can add/remove notes without
+// overwriting anyone else's edits (David, 2026-09-22). Opened with ?doc=notes:
+//   GET  -> { notes:[...], deleted:[ids], updatedAt }
+//   POST -> { op:"add", note:{id,ts,tag,text,by} } or { op:"del", id }  (merged server-side)
+const NOTES_KEY = "shared-notes";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, PUT, POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
@@ -46,6 +51,10 @@ export default async (req) => {
       status: 500,
       headers: CORS_HEADERS,
     });
+  }
+
+  if (new URL(req.url).searchParams.get("doc") === "notes") {
+    return notesDoc(req, store);
   }
 
   if (req.method === "GET") {
@@ -102,3 +111,62 @@ export default async (req) => {
 export const config = {
   path: "/.netlify/functions/sync",
 };
+
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS_HEADERS, "Content-Type": "application/json", "Cache-Control": "no-store" },
+  });
+}
+
+async function readNotes(store) {
+  const got = await store.getWithMetadata(NOTES_KEY, { type: "json" });
+  const doc = (got && got.data) || {};
+  return {
+    etag: got ? got.etag : null,
+    doc: {
+      notes: Array.isArray(doc.notes) ? doc.notes : [],
+      deleted: Array.isArray(doc.deleted) ? doc.deleted : [],
+      updatedAt: doc.updatedAt || 0,
+    },
+  };
+}
+
+async function notesDoc(req, store) {
+  try {
+    if (req.method === "GET") return json((await readNotes(store)).doc);
+    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+    let op;
+    try { op = await req.json(); } catch (err) { return json({ error: "Invalid JSON body" }, 400); }
+    const isAdd = op && op.op === "add" && op.note && op.note.id && typeof op.note.text === "string";
+    const isDel = op && op.op === "del" && op.id;
+    if (!isAdd && !isDel) return json({ error: "Unknown op" }, 400);
+    // read-modify-write, retried if someone else wrote in between (conditional write on the etag)
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { etag, doc } = await readNotes(store);
+      if (isAdd) {
+        const n = op.note, id = String(n.id);
+        if (!doc.notes.some((x) => x.id === id) && !doc.deleted.includes(id)) {
+          doc.notes.push({
+            id,
+            ts: Number(n.ts) || Date.now(),
+            tag: String(n.tag || ""),
+            text: String(n.text).slice(0, 4000),
+            by: String(n.by || "").slice(0, 80),
+          });
+        }
+      } else {
+        const id = String(op.id);
+        doc.notes = doc.notes.filter((x) => x.id !== id);
+        if (!doc.deleted.includes(id)) doc.deleted.push(id);
+      }
+      doc.updatedAt = Date.now();
+      const opts = etag ? { onlyIfMatch: etag } : { onlyIfNew: true };
+      const res = await store.setJSON(NOTES_KEY, doc, opts);
+      if (!res || res.modified !== false) return json({ ok: true, doc });
+    }
+    return json({ error: "Busy - please retry" }, 409);
+  } catch (err) {
+    return json({ error: "Notes failed: " + err.message }, 500);
+  }
+}
