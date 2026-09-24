@@ -702,8 +702,8 @@
           <input id="ntext" class="ntext" type="text" placeholder="Log an update — commitment, slip, RFI, review comment…" autocomplete="off">
           <button id="nadd" class="exp">Add note</button>
           <div class="filter" id="ngroupsel" title="How the notes list is arranged">
-            <button data-g="area">By area</button>
-            <button data-g="time" class="on">Newest first</button>
+            <button data-g="area" class="on">By area</button>
+            <button data-g="time">Newest first</button>
           </div>
         </div>
         <div id="nlist" class="nlist"></div>
@@ -2475,7 +2475,7 @@ function tagLabel(tag,rows){
 // Notes grouped by area/location (Colten, 2026-09-22). Area = Admin, COLO1-4 (each COLO carries its
 // own Elec Yard and Mech Yard), or Site-wide. Location comes from the set's WPID prefix, not its label,
 // so the COLO2-4 chiller duct bank sets (prefix MY2-4) land under their Mech Yard like COLO1's does.
-let notesGrouped = false;   // default: newest first, so the latest updates are at the top
+let notesGrouped = true;
 const nShut = {};   // area -> true when collapsed (this session only)
 const escN = t => String(t).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 function tsNum(ts){
