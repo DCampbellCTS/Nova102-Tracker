@@ -2082,6 +2082,10 @@ const BUILTIN_VIEWS = {
   "Past their need date"   : {arr:"ALL", stage:"any", from:"", to:"", loc:"ALL", wt:"ALL", due:"ALL", behind:true},
   "IFC in the next 30 days": {arr:"ALL", stage:"ifc", from:"TODAY", to:"TODAY+30", loc:"ALL", wt:"ALL", open:true},
   "IFR needed in the next 30 days": {arr:"ALL", stage:"ifr", from:"TODAY", to:"TODAY+30", loc:"ALL", wt:"ALL", open:true},
+  // 2-week BIM deliverables lookahead (David, 2026-09-29): same logic as the 30-day views, 14-day window
+  "Due in the next 14 days (any stage)": {arr:"ALL", stage:"any", from:"TODAY", to:"TODAY+14", loc:"ALL", wt:"ALL", open:true, view:"sheets", sortBy:"prio"},
+  "IFC in the next 14 days": {arr:"ALL", stage:"ifc", from:"TODAY", to:"TODAY+14", loc:"ALL", wt:"ALL", open:true},
+  "IFR needed in the next 14 days": {arr:"ALL", stage:"ifr", from:"TODAY", to:"TODAY+14", loc:"ALL", wt:"ALL", open:true},
   "UG conduit only"        : {arr:"ALL", stage:"any", from:"", to:"", loc:"ALL", wt:"UG conduit"},
 };
 function isoAdd(days){ const d=new Date(); d.setHours(0,0,0,0);
