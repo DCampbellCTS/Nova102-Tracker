@@ -8,3 +8,11 @@
   for = "/*"
   [headers.values]
     Cache-Control = "no-cache"
+
+# Retired 2026-09-30: this site moved to Cloudflare behind the HCG sign-in.
+# Every request (pages and functions) is sent to the new address. 302 so it can be undone.
+[[redirects]]
+  from = "/*"
+  to = "https://nova102-tracker.hcgbimassistant.com/:splat"
+  status = 302
+  force = true
