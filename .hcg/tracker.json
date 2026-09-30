@@ -1,0 +1,13 @@
+{
+  "iff_keywords": ["FABRICATION"],
+  "default_group_work_type": "UGC",
+  "pushed_by": "Automated daily update",
+  "typical_sheets": [
+    {
+      "group": "UG-PFB-TYP",
+      "sheet_regex": "^PFB\\.UG\\.UGC-(\\d+)(?:\\(|$)",
+      "key": "{project}.UG.UG.TYP-{n}.PFB",
+      "stage": "iff"
+    }
+  ]
+}
