@@ -930,7 +930,7 @@ const GROUPS = [
 // Above-ground (OH) work packages -- Triad OH Work Package Register + Area Breakout key plan, rcvd 2026-09-30.
 // One entry per Triad Sub Area (each bundles that sub area's work-type WPs; count in the Coordination Schedule / NOVA102 OH WP Register).
 // zone = <Area letter>.<Sub Area>; wpid = NOVA102.<Phase>.OH.<Area>.<Sub Area> (the Coordination Schedule OH rollup key). No OH sheet convention yet.
-// COLO2-4 / Yards 2-4 stay in PENDING until Triad issues their breakdown.
+// COLO2-4 / Yards 2-4 added 2026-09-30 from Triad's full OH register (r2): 162 Sub Areas / 6,297 WPs.
 {key:"AD-AG-R", prefix:"AD", label:"Admin — overhead (Area R)", anchor:"AD-AG", ph:"AG", wtype:"OH",
    sheets:[["R.MDF054",null],["R.HALL",null],["R.FOC",null],["R.SOC",null],["R.000",null],["R.005",null],["R.010",null],["R.011",null],["R.012",null],["R.014",null],["R.015",null],["R.016",null],["R.021",null],["R.024",null],["R.050",null]]},
 {key:"AD-AG-Q", prefix:"AD", label:"Admin — overhead (Area Q)", anchor:"AD-AG", ph:"AG", wtype:"OH",
@@ -946,13 +946,46 @@ const GROUPS = [
 {key:"EY1-AG", prefix:"EY1", label:"Elec Yard 1 — overhead", anchor:"C1-AG", ph:"AG", wtype:"OH",
    sheets:[["EY1.GEN",null],["EY1.1",null],["EY1.2",null],["EY1.3",null],["EY1.MGS-B",null],["EY1.MGS-A",null]]},
 {key:"MY1-AG", prefix:"MY1", label:"Mech Yard 1 — overhead", anchor:"C1-AG", ph:"AG", wtype:"OH",
-   sheets:[["MY1.GEN",null],["MY1.1",null],["MY1.2",null],["MY1.3",null],["MY1.CH100-1",null],["MY1.CH100-2",null],["MY1.CH100-3",null],["MY1.CH100-4",null],["MY1.CH100-5",null]]}
+   sheets:[["MY1.GEN",null],["MY1.1",null],["MY1.2",null],["MY1.3",null],["MY1.CH100-1",null],["MY1.CH100-2",null],["MY1.CH100-3",null],["MY1.CH100-4",null],["MY1.CH100-5",null]]},
+{key:"C2-AG-I", prefix:"C2", label:"COLO2 — overhead (Area I)", anchor:"C2-AG", ph:"AG", wtype:"OH",
+   sheets:[["I.203-1",null],["I.203-2",null],["I.203-3",null],["I.202-1",null],["I.202-2",null],["I.202-3",null],["I.201-1",null],["I.201-2",null],["I.207",null],["I.210",null]]},
+{key:"C2-AG-J", prefix:"C2", label:"COLO2 — overhead (Area J)", anchor:"C2-AG", ph:"AG", wtype:"OH",
+   sheets:[["J.203-1",null],["J.203-2",null],["J.203-3",null],["J.204-1",null],["J.204-2",null],["J.204-3",null],["J.206-1",null],["J.206-2",null],["J.206-3",null],["J.211",null],["J.213",null]]},
+{key:"C2-AG-K", prefix:"C2", label:"COLO2 — overhead (Area K)", anchor:"C2-AG", ph:"AG", wtype:"OH",
+   sheets:[["K.203-1",null],["K.203-2",null],["K.203-3",null],["K.202-1",null],["K.202-2",null],["K.202-3",null],["K.201-1",null],["K.201-2",null],["K.109",null]]},
+{key:"C2-AG-L", prefix:"C2", label:"COLO2 — overhead (Area L)", anchor:"C2-AG", ph:"AG", wtype:"OH",
+   sheets:[["L.203-1",null],["L.203-2",null],["L.203-3",null],["L.204-1",null],["L.204-2",null],["L.204-3",null],["L.206-1",null],["L.206-2",null],["L.206-3",null],["L.205",null]]},
+{key:"EY2-AG", prefix:"EY2", label:"Elec Yard 2 — overhead", anchor:"C2-AG", ph:"AG", wtype:"OH",
+   sheets:[["EY2.1",null],["EY2.2",null],["EY2.3",null],["EY2.4",null],["EY2.MGS-B",null],["EY2.MGS-A",null]]},
+{key:"MY2-AG", prefix:"MY2", label:"Mech Yard 2 — overhead", anchor:"C2-AG", ph:"AG", wtype:"OH",
+   sheets:[["MY2.1",null],["MY2.2",null],["MY2.3",null],["MY2.CH200-1",null],["MY2.CH200-2",null],["MY2.CH200-3",null],["MY2.CH200-4",null],["MY2.CH200-5",null]]},
+{key:"C3-AG-E", prefix:"C3", label:"COLO3 — overhead (Area E)", anchor:"C3-AG", ph:"AG", wtype:"OH",
+   sheets:[["E.303-1",null],["E.303-2",null],["E.303-3",null],["E.302-1",null],["E.302-2",null],["E.302-3",null],["E.301-1",null],["E.301-2",null],["E.307",null],["E.310",null]]},
+{key:"C3-AG-F", prefix:"C3", label:"COLO3 — overhead (Area F)", anchor:"C3-AG", ph:"AG", wtype:"OH",
+   sheets:[["F.303-1",null],["F.303-2",null],["F.303-3",null],["F.304-1",null],["F.304-2",null],["F.304-3",null],["F.306-1",null],["F.306-2",null],["F.306-3",null],["F.311",null],["F.313",null]]},
+{key:"C3-AG-G", prefix:"C3", label:"COLO3 — overhead (Area G)", anchor:"C3-AG", ph:"AG", wtype:"OH",
+   sheets:[["G.303-1",null],["G.303-2",null],["G.303-3",null],["G.302-1",null],["G.302-2",null],["G.302-3",null],["G.301-1",null],["G.301-2",null],["G.208",null]]},
+{key:"C3-AG-H", prefix:"C3", label:"COLO3 — overhead (Area H)", anchor:"C3-AG", ph:"AG", wtype:"OH",
+   sheets:[["H.303-1",null],["H.303-2",null],["H.303-3",null],["H.304-1",null],["H.304-2",null],["H.304-3",null],["H.306-1",null],["H.306-2",null],["H.306-3",null],["H.305",null]]},
+{key:"EY3-AG", prefix:"EY3", label:"Elec Yard 3 — overhead", anchor:"C3-AG", ph:"AG", wtype:"OH",
+   sheets:[["EY3.1",null],["EY3.2",null],["EY3.3",null],["EY3.4",null],["EY3.MGS-B",null],["EY3.MGS-A",null]]},
+{key:"MY3-AG", prefix:"MY3", label:"Mech Yard 3 — overhead", anchor:"C3-AG", ph:"AG", wtype:"OH",
+   sheets:[["MY3.1",null],["MY3.2",null],["MY3.3",null],["MY3.CH300-1",null],["MY3.CH300-2",null],["MY3.CH300-3",null],["MY3.CH300-4",null],["MY3.CH300-5",null]]},
+{key:"C4-AG-A", prefix:"C4", label:"COLO4 — overhead (Area A)", anchor:"C4-AG", ph:"AG", wtype:"OH",
+   sheets:[["A.403-1",null],["A.403-2",null],["A.403-3",null],["A.402-1",null],["A.402-2",null],["A.402-3",null],["A.401-1",null],["A.401-2",null],["A.407",null],["A.408",null]]},
+{key:"C4-AG-B", prefix:"C4", label:"COLO4 — overhead (Area B)", anchor:"C4-AG", ph:"AG", wtype:"OH",
+   sheets:[["B.403-1",null],["B.403-2",null],["B.403-3",null],["B.404-1",null],["B.404-2",null],["B.404-3",null],["B.406-1",null],["B.406-2",null],["B.406-3",null],["B.410",null],["B.412",null]]},
+{key:"C4-AG-C", prefix:"C4", label:"COLO4 — overhead (Area C)", anchor:"C4-AG", ph:"AG", wtype:"OH",
+   sheets:[["C.403-1",null],["C.403-2",null],["C.403-3",null],["C.402-1",null],["C.402-2",null],["C.402-3",null],["C.401-1",null],["C.401-2",null],["C.308",null]]},
+{key:"C4-AG-D", prefix:"C4", label:"COLO4 — overhead (Area D)", anchor:"C4-AG", ph:"AG", wtype:"OH",
+   sheets:[["D.403-1",null],["D.403-2",null],["D.403-3",null],["D.404-1",null],["D.404-2",null],["D.404-3",null],["D.406-1",null],["D.406-2",null],["D.406-3",null],["D.405",null]]},
+{key:"EY4-AG", prefix:"EY4", label:"Elec Yard 4 — overhead", anchor:"C4-AG", ph:"AG", wtype:"OH",
+   sheets:[["EY4.1",null],["EY4.2",null],["EY4.3",null],["EY4.4",null],["EY4.MGS-B",null],["EY4.MGS-A",null]]},
+{key:"MY4-AG", prefix:"MY4", label:"Mech Yard 4 — overhead", anchor:"C4-AG", ph:"AG", wtype:"OH",
+   sheets:[["MY4.1",null],["MY4.2",null],["MY4.3",null],["MY4.CH400-1",null],["MY4.CH400-2",null],["MY4.CH400-3",null],["MY4.CH400-4",null],["MY4.CH400-5",null]]}
 ];
-// Blocks without a per-sheet breakdown yet (COLO2-4 UG remainder; AG for COLO2-4 until Triad issues it) — tracked at block level.
+// Blocks without a per-sheet breakdown yet — tracked at block level. (Empty since 2026-09-30: all AG blocks now come from Triad's OH register.)
 const PENDING = [
-  {key:"C2-AG", label:"COLO2 / MY2 / EY2 — overhead (placeholder, awaiting Triad breakdown)", anchor:"C2-AG", ph:"AG", wp:156},
-  {key:"C3-AG", label:"COLO3 / MY3 / EY3 — overhead (placeholder, awaiting Triad breakdown)", anchor:"C3-AG", ph:"AG", wp:156},
-  {key:"C4-AG", label:"COLO4 / MY4 / EY4 — overhead (placeholder, awaiting Triad breakdown)", anchor:"C4-AG", ph:"AG", wp:156},
 ];
 function wpid(prefix,zone,wtype){ return wtype==="OH" ? `NOVA102.${prefix}.OH.${zone}` : `NOVA102.${prefix}.UG.${zone}.${wtype||"UGC"}`; }
 // Real today (was fixed at 2026-09-01). RUN0 = the first working day from today: a forecast for a
