@@ -1,0 +1,17 @@
+# Files Cloudflare must NOT serve (the site is deployed from the repo root).
+.git
+.github
+.gitignore
+.assetsignore
+wrangler.toml
+netlify.toml
+netlify
+cloudflare
+node_modules
+package.json
+package-lock.json
+README.md
+SCHEMA.md
+tools
+.hcg
+*.py

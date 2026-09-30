@@ -1,0 +1,21 @@
+name = "nova102-tracker"
+main = "cloudflare/worker.js"
+compatibility_date = "2026-09-01"
+
+# Tracker on Cloudflare Workers (moved from Netlify 2026-09-30). The static site is served from the
+# repo root (.assetsignore keeps repo-only files private); cloudflare/worker.js answers the shared
+# notes/state endpoint at the same path as before: /.netlify/functions/sync
+# Reachable only through its custom domain, which sits behind Cloudflare Access (HCG sign-in).
+workers_dev = false
+preview_urls = false
+
+[assets]
+directory = "."
+binding = "ASSETS"
+run_worker_first = ["/.netlify/*"]
+
+# Shared state + notes (replaces Netlify Blobs). Table is created on first use.
+[[d1_databases]]
+binding = "DB"
+database_name = "nova102-tracker-sync"
+database_id = "b45308f5-1550-4ceb-9f58-6786c6582f5d"
