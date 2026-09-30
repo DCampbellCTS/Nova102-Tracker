@@ -1,7 +1,7 @@
 ﻿# Nova102 Schedule Tracker
 
 Static, self-contained HTML tracker (Project Nova / IND-102 UG conduit drawing pipeline).
-Deployed to https://nova102scheduletracker.netlify.app/
+Deployed to https://nova102-tracker.hcgbimassistant.com/
 
 Every page load seeds itself from a snapshot baked into index.html at publish time
 (SEED_STATE, plus SEED_PUSHED_BY / SEED_PUSHED_AT) rather than reading browser
