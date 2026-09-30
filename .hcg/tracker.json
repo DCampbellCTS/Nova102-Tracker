@@ -5,7 +5,7 @@
   "typical_sheets": [
     {
       "group": "UG-PFB-TYP",
-      "sheet_regex": "^PFB\\.UG\\.UGC-(\\d+)(?:\\(|$)",
+      "sheet_regex": "^PFB\\.UG\\.(?:C3\\.(?:C4\\.)?)?UGC-(\\d+)(?:\\(|$)",
       "key": "{project}.UG.UG.TYP-{n}.PFB",
       "stage": "iff"
     }
