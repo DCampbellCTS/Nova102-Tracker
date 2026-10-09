@@ -1715,8 +1715,8 @@ function fieldSetCell(r){
 function p6Tag(wpid){
   const e=(SEED_P6M||{})[wpid]; if(!e) return "";
   const q=x=>String(x).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");
-  const tip=q(`ARCO P6 9/30: ${e.id} ${e.n} | ${e.s}${e.sa?" A":""} to ${e.f}${e.fa?" A":""} | map confidence ${e.c}`+(e.o?` | also touches ${e.o}`:"")+(e.more?` | other seq/parts: ${e.more.join(", ")}`:""));
-  return `<div class="p6t" style="font-size:10px;color:#6b7280;white-space:nowrap;margin-top:2px" title="${tip}">P6 ${q(e.id.replace("IND102-",""))}${e.c&&e.c!=="HIGH"?" \u00b7 "+q(e.c.toLowerCase()):""}</div>`;
+  const tip=q(`DRAFT: pending Triad validation of WP-to-P6 links. ARCO P6 9/30: ${e.id} ${e.n} | ${e.s}${e.sa?" A":""} to ${e.f}${e.fa?" A":""} | map confidence ${e.c}`+(e.o?` | also touches ${e.o}`:"")+(e.more?` | other seq/parts: ${e.more.join(", ")}`:""));
+  return `<div class="p6t" style="font-size:10px;color:#6b7280;white-space:nowrap;margin-top:2px" title="${tip}">P6 draft ${q(e.id.replace("IND102-",""))}${e.c&&e.c!=="HIGH"?" \u00b7 "+q(e.c.toLowerCase()):""}</div>`;
 }
 function statusSeg(setKey,wpid,done,held){
   const st = held? "hold" : "fc";
