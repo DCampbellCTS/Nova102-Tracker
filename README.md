@@ -9,5 +9,5 @@ storage, so every viewer sees the same last-pushed position regardless of device
 Edits a viewer makes in their own browser are local only and are not saved back here.
 
 To publish an update: replace index.html with a new build and push to main —
-once this repo is linked to the Netlify site for continuous deployment, that push
-triggers the live redeploy automatically.
+Cloudflare redeploys https://nova102-tracker.hcgbimassistant.com/ from `main` automatically.
+Hosted on Cloudflare Workers behind Cloudflare Access (HCG sign-in), deployed from `main` by Cloudflare's GitHub integration. The old Netlify site was deleted on 2026-10-09.
